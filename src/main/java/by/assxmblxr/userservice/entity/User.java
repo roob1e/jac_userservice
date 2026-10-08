@@ -2,11 +2,14 @@ package by.assxmblxr.userservice.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
 @Getter
 @Setter
+@Builder
+@AllArgsConstructor
 @NoArgsConstructor
 @Entity
 @Table(name = "users")
@@ -25,5 +28,6 @@ public class User {
   private String lastName;
 
   @Column
+  @CreationTimestamp
   private Instant createdAt;
 }
