@@ -8,7 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 public final class CardSpecification {
   private CardSpecification() {}
 
-  public static Specification<Card> ownersFirstNameContains(String firstName) {
+  public static Specification<Card> ownerFirstNameContains(String firstName) {
     return (root, query, cb) -> {
       if (firstName == null || firstName.isBlank()) {
         return cb.conjunction();
@@ -18,7 +18,7 @@ public final class CardSpecification {
     };
   }
 
-  public static Specification<Card> ownersLastNameContains(String lastName) {
+  public static Specification<Card> ownerLastNameContains(String lastName) {
     return (root, query, cb) -> {
       if (lastName == null || lastName.isBlank()) {
         return cb.conjunction();
