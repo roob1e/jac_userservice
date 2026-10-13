@@ -10,6 +10,7 @@ public record UserResponse(
         String email,
         String firstName,
         String lastName,
-        Instant createdAt
+        Instant createdAt,
+        boolean active
 ) {
 }
