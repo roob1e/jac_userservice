@@ -1,0 +1,56 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-create-cards-table
+      author: assxmblxr
+      changes:
+        - createTable:
+            tableName: cards
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_cards_id
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_cards_user_id
+                    references: users(id)
+              - column:
+                  name: number
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_cards_number
+              - column:
+                  name: holder
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expiration_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: active
+                  type: BOOLEAN
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_cards_user_id
+            tableName: cards
+            columns:
+              - column:
+                  name: user_id
