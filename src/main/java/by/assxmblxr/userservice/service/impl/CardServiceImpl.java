@@ -90,7 +90,7 @@ public class CardServiceImpl implements CardService {
   }
 
   private User findUser(Long id) {
-    return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));
+    return userRepository.findByIdForUpdate(id).orElseThrow(() -> new UserNotFoundException(id));
   }
 
   private Card findCard(Long id) {
