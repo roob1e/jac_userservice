@@ -29,6 +29,12 @@
     <properties>
         <java.version>21</java.version>
         <mapstruct.version>1.6.3</mapstruct.version>
+        <!-- Security overrides of versions managed by Spring Boot 4.1.1 -->
+        <tomcat.version>11.0.27</tomcat.version>
+        <jackson-bom.version>3.2.3</jackson-bom.version>
+        <!-- Jackson 3.2 requires jackson-annotations 2.22, which comes from the Jackson 2 BOM -->
+        <jackson-2-bom.version>2.22.3</jackson-2-bom.version>
+        <logback.version>1.6.5</logback.version>
     </properties>
     <dependencies>
         <dependency>
@@ -194,6 +200,26 @@
                                 </path>
                             </annotationProcessorPaths>
                         </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.13</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
                     </execution>
                 </executions>
             </plugin>
