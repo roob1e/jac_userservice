@@ -16,6 +16,9 @@ import by.assxmblxr.userservice.repository.CardRepository;
 import by.assxmblxr.userservice.repository.UserRepository;
 import by.assxmblxr.userservice.service.CardService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -32,8 +35,10 @@ public class CardServiceImpl implements CardService {
   private final CardRepository cardRepository;
   private final UserRepository userRepository;
   private final CardMapper cardMapper;
+  private final CacheManager cacheManager;
 
   @Override
+  @CacheEvict(cacheNames = "users", key = "#userId")
   @Transactional
   public CardResponse create(Long userId, CardCreateRequest request) {
     User user = findUser(userId);
@@ -71,21 +76,27 @@ public class CardServiceImpl implements CardService {
   }
 
   @Override
+  @CacheEvict(cacheNames = "users", key = "#result.userId()")
   @Transactional
   public CardResponse update(Long id, CardUpdateRequest request) {
     Card card = findCard(id);
     if (cardRepository.existsByNumberAndIdNot(request.number(), id)) {
       throw new CardNumberAlreadyExistsException(request.number());
     }
-    cardMapper.updateEntity(request,card);
+    cardMapper.updateEntity(request, card);
     return cardMapper.toResponse(card);
   }
 
   @Override
   @Transactional
   public void setActive(Long id, boolean active) {
+    Cache cache = cacheManager.getCache("users");
     if (cardRepository.updateActive(id, active) == 0) {
       throw new CardNotFoundException(id);
+    }
+    Long userId = cardRepository.findUserIdById(id).orElseThrow(() -> new CardNotFoundException(id));
+    if (cache != null) {
+      cache.evict(userId);
     }
   }
 

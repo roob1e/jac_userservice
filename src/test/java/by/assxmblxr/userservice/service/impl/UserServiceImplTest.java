@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import by.assxmblxr.userservice.dto.UserCreateRequest;
 import by.assxmblxr.userservice.dto.UserResponse;
 import by.assxmblxr.userservice.dto.UserUpdateRequest;
+import by.assxmblxr.userservice.dto.UserWithCardsResponse;
 import by.assxmblxr.userservice.entity.User;
 import by.assxmblxr.userservice.exception.EmailAlreadyExistsException;
 import by.assxmblxr.userservice.exception.UserNotFoundException;
@@ -85,9 +86,9 @@ class UserServiceImplTest {
 
   @Test
   void findByIdReturnsUser() {
-    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user()));
+    when(userRepository.findWithCardsById(USER_ID)).thenReturn(Optional.of(user()));
 
-    UserResponse response = userService.findById(USER_ID);
+    UserWithCardsResponse response = userService.findById(USER_ID);
 
     assertThat(response.id()).isEqualTo(USER_ID);
     assertThat(response.email()).isEqualTo(EMAIL);
@@ -95,7 +96,7 @@ class UserServiceImplTest {
 
   @Test
   void findByIdThrowsWhenUserNotFound() {
-    when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+    when(userRepository.findWithCardsById(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> userService.findById(USER_ID))
             .isInstanceOf(UserNotFoundException.class);

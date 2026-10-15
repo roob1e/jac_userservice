@@ -3,13 +3,13 @@ package by.assxmblxr.userservice.mapper;
 import by.assxmblxr.userservice.dto.UserCreateRequest;
 import by.assxmblxr.userservice.dto.UserResponse;
 import by.assxmblxr.userservice.dto.UserUpdateRequest;
+import by.assxmblxr.userservice.dto.UserWithCardsResponse;
 import by.assxmblxr.userservice.entity.User;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
-import org.mapstruct.Mappings;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = CardMapper.class)
 public interface UserMapper {
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "createdAt", ignore = true)
@@ -24,4 +24,6 @@ public interface UserMapper {
   void updateEntity(UserUpdateRequest request, @MappingTarget User user);
 
   UserResponse toResponse(User user);
+
+  UserWithCardsResponse toResponseWithCards(User user);
 }

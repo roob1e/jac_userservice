@@ -30,6 +30,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -55,6 +57,12 @@ class CardServiceImplTest {
 
   @Spy
   private CardMapper cardMapper = new CardMapperImpl();
+
+  @Mock
+  private CacheManager cacheManager;
+
+  @Mock
+  private Cache usersCache;
 
   @InjectMocks
   private CardServiceImpl cardService;
@@ -207,12 +215,15 @@ class CardServiceImplTest {
   }
 
   @Test
-  void setActiveUpdatesCard() {
+  void setActiveUpdatesCardAndEvictsOwnerFromCache() {
+    when(cacheManager.getCache("users")).thenReturn(usersCache);
     when(cardRepository.updateActive(CARD_ID, false)).thenReturn(1);
+    when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.of(USER_ID));
 
     cardService.setActive(CARD_ID, false);
 
     verify(cardRepository).updateActive(CARD_ID, false);
+    verify(usersCache).evict(USER_ID);
   }
 
   @Test
@@ -221,6 +232,7 @@ class CardServiceImplTest {
 
     assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
             .isInstanceOf(CardNotFoundException.class);
+    verify(usersCache, never()).evict(any());
   }
 
   private User user() {

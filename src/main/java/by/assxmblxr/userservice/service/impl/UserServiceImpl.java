@@ -5,6 +5,7 @@ import static by.assxmblxr.userservice.specification.UserSpecification.*;
 import by.assxmblxr.userservice.dto.UserCreateRequest;
 import by.assxmblxr.userservice.dto.UserResponse;
 import by.assxmblxr.userservice.dto.UserUpdateRequest;
+import by.assxmblxr.userservice.dto.UserWithCardsResponse;
 import by.assxmblxr.userservice.entity.User;
 import by.assxmblxr.userservice.exception.EmailAlreadyExistsException;
 import by.assxmblxr.userservice.exception.UserNotFoundException;
@@ -13,6 +14,8 @@ import by.assxmblxr.userservice.repository.CardRepository;
 import by.assxmblxr.userservice.repository.UserRepository;
 import by.assxmblxr.userservice.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -37,8 +40,10 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  public UserResponse findById(Long id) {
-    return userMapper.toResponse(findUser(id));
+  @Cacheable(cacheNames = "users", key = "#id")
+  public UserWithCardsResponse findById(Long id) {
+    User user = userRepository.findWithCardsById(id).orElseThrow(() -> new UserNotFoundException(id));
+    return userMapper.toResponseWithCards(user);
   }
 
   @Override
@@ -48,6 +53,7 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  @CacheEvict(cacheNames = "users", key = "#id")
   @Transactional
   public UserResponse update(Long id, UserUpdateRequest request) {
     User user = findUser(id);
@@ -59,6 +65,7 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
+  @CacheEvict(cacheNames = "users", key = "#id")
   @Transactional
   public void setActive(Long id, boolean active) {
     if (userRepository.updateActive(id, active) == 0) {
