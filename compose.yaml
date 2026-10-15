@@ -3,6 +3,11 @@ services:
     image: 'redis:8.10'
     ports:
       - '6379'
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   postgres:
     image: 'postgres:17'
     environment:
@@ -11,3 +16,22 @@ services:
       - 'POSTGRES_PASSWORD=secret'
     ports:
       - '5432'
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user", "-d", "users"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  app:
+    build: .
+    profiles: ["app"]
+    ports:
+      - '8080:8080'
+    environment:
+      - 'SPRING_PROFILES_ACTIVE=docker'
+      - 'POSTGRES_USER=user'
+      - 'POSTGRES_PASSWORD=secret'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
