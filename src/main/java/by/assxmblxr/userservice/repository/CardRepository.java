@@ -8,9 +8,11 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CardRepository extends JpaRepository<Card, Long>, JpaSpecificationExecutor<Card> {
   List<Card> findByUserId(Long userId);
+
   long countByUserId(Long userId);
 
   @Modifying(clearAutomatically = true)
@@ -19,9 +21,12 @@ public interface CardRepository extends JpaRepository<Card, Long>, JpaSpecificat
 
   @Modifying(clearAutomatically = true)
   @Query("update Card c set c.active = false where c.user.id = :userId")
-  int deactivateByUserId(@Param("userId") Long userId);
+  void deactivateByUserId(@Param("userId") Long userId);
 
   boolean existsByNumber(String number);
 
   boolean existsByNumberAndIdNot(String number, Long id);
+
+  @Query("select c.user.id from Card c where c.id = :id")
+  Optional<Long> findUserIdById(@Param("id") Long id);
 }

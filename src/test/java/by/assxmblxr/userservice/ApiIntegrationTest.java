@@ -12,14 +12,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import by.assxmblxr.userservice.repository.CardRepository;
-import by.assxmblxr.userservice.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.net.URI;
@@ -34,15 +35,18 @@ class ApiIntegrationTest {
   private MockMvc mockMvc;
 
   @Autowired
-  private UserRepository userRepository;
-
-  @Autowired
   private CardRepository cardRepository;
 
+  @Autowired
+  private CacheManager cacheManager;
+
+  @Autowired
+  private JdbcTemplate jdbcTemplate;
+
   @BeforeEach
-  void cleanDatabase() {
-    cardRepository.deleteAllInBatch();
-    userRepository.deleteAllInBatch();
+  void cleanDatabaseAndCache() {
+    jdbcTemplate.execute("TRUNCATE TABLE cards, users RESTART IDENTITY");
+    cacheManager.getCacheNames().forEach(name -> cacheManager.getCache(name).clear());
   }
 
   @Test
@@ -117,6 +121,45 @@ class ApiIntegrationTest {
             .andExpect(jsonPath("$.active").value(false));
     mockMvc.perform(get("/users/{userId}/cards", userId))
             .andExpect(jsonPath("$[0].active").value(false));
+  }
+
+  @Test
+  void cachedUserWithCardsReflectsEveryChange() throws Exception {
+    createUser("other@mail.com", "Other", "User");
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(jsonPath("$.cards.length()").value(0));
+
+    String card = mockMvc.perform(post("/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4111111111111111")))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+    long cardId = ((Number) JsonPath.read(card, "$.id")).longValue();
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(jsonPath("$.cards.length()").value(1));
+
+    mockMvc.perform(put("/cards/{id}", cardId)
+                    .contentType(APPLICATION_JSON)
+                    .content("""
+                            {"number": "4111111111111111", "holder": "NEW HOLDER", "expirationDate": "03/30"}
+                            """))
+            .andExpect(status().isOk());
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(jsonPath("$.cards[0].holder").value("NEW HOLDER"));
+
+    mockMvc.perform(patch("/cards/{id}/deactivate", cardId))
+            .andExpect(status().isNoContent());
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(jsonPath("$.cards[0].active").value(false));
+
+    mockMvc.perform(put("/users/{id}", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
+            .andExpect(status().isOk());
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(jsonPath("$.lastName").value("Sidorov"));
   }
 
   @Test

@@ -19,4 +19,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select u from User u where u.id = :id")
   Optional<User> findByIdForUpdate(@Param("id") Long id);
+
+  @EntityGraph(attributePaths = "cards")
+  Optional<User> findWithCardsById(Long id);
 }

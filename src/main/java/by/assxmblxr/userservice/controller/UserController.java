@@ -3,6 +3,7 @@ package by.assxmblxr.userservice.controller;
 import by.assxmblxr.userservice.dto.UserCreateRequest;
 import by.assxmblxr.userservice.dto.UserResponse;
 import by.assxmblxr.userservice.dto.UserUpdateRequest;
+import by.assxmblxr.userservice.dto.UserWithCardsResponse;
 import by.assxmblxr.userservice.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,7 @@ public class UserController {
   }
 
   @GetMapping("/{id}")
-  public ResponseEntity<UserResponse> findById(@PathVariable Long id) {
+  public ResponseEntity<UserWithCardsResponse> findById(@PathVariable Long id) {
     return ResponseEntity.ok(userService.findById(id));
   }
 
