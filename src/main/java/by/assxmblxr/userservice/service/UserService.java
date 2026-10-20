@@ -13,4 +13,5 @@ public interface UserService {
   Page<UserResponse> findAll(String firstName, String lastName, Pageable pageable);
   UserResponse update(Long id, UserUpdateRequest request);
   void setActive(Long id, boolean active);
+  void deleteById(Long id);
 }
