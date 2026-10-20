@@ -4,6 +4,7 @@ import by.assxmblxr.userservice.dto.UserCreateRequest;
 import by.assxmblxr.userservice.dto.UserResponse;
 import by.assxmblxr.userservice.dto.UserUpdateRequest;
 import by.assxmblxr.userservice.dto.UserWithCardsResponse;
+import by.assxmblxr.userservice.exception.UserNotFoundException;
 import by.assxmblxr.userservice.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,5 +61,15 @@ public class UserController {
   public ResponseEntity<Void> deactivate(@PathVariable Long id) {
     userService.setActive(id, false);
     return ResponseEntity.noContent().build();
+  }
+
+  @DeleteMapping("/{id}")
+  public ResponseEntity<Void> delete(@PathVariable Long id) {
+    try {
+      userService.deleteById(id);
+      return ResponseEntity.noContent().build();
+    } catch (UserNotFoundException e) {
+      return ResponseEntity.notFound().build();
+    }
   }
 }

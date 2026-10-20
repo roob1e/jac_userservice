@@ -76,6 +76,12 @@ public class UserServiceImpl implements UserService {
     }
   }
 
+  @Override
+  @CacheEvict(cacheNames = "users", key = "#id")
+  public void deleteById(Long id) {
+    userRepository.delete(findUser(id));
+  }
+
   private User findUser(Long id) {
     return userRepository.findById(id).orElseThrow(() -> new UserNotFoundException(id));
   }
