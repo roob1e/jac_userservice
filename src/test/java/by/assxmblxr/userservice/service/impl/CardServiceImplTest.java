@@ -3,6 +3,7 @@ package by.assxmblxr.userservice.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -71,8 +72,8 @@ class CardServiceImplTest {
   void createAddsCardToUserAndSavesItThroughCascade() {
     User user = user();
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
-    when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-    when(cardRepository.countByUserId(USER_ID)).thenReturn(4L);
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    when(cardRepository.countActiveByUserId(USER_ID)).thenReturn(4L);
     when(cardRepository.existsByNumber(NUMBER)).thenReturn(false);
 
     CardResponse response = cardService.create(USER_ID, request);
@@ -82,6 +83,7 @@ class CardServiceImplTest {
     assertThat(card.getUser()).isSameAs(user);
     assertThat(card.getExpirationDate()).isEqualTo(LocalDate.of(2030, 3, 31));
     assertThat(card.isActive()).isTrue();
+    verify(userRepository).lockRowForUpdate(USER_ID);
     verify(userRepository).flush();
     verify(cardRepository, never()).save(any());
 
@@ -93,10 +95,11 @@ class CardServiceImplTest {
   @Test
   void createThrowsWhenUserNotFound() {
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
-    when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.empty());
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> cardService.create(USER_ID, request))
             .isInstanceOf(UserNotFoundException.class);
+    verify(userRepository, never()).lockRowForUpdate(anyLong());
     verify(userRepository, never()).flush();
   }
 
@@ -104,8 +107,8 @@ class CardServiceImplTest {
   void createThrowsWhenUserAlreadyHasFiveCards() {
     User user = user();
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
-    when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-    when(cardRepository.countByUserId(USER_ID)).thenReturn(5L);
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    when(cardRepository.countActiveByUserId(USER_ID)).thenReturn(5L);
 
     assertThatThrownBy(() -> cardService.create(USER_ID, request))
             .isInstanceOf(CardLimitExceededException.class);
@@ -117,8 +120,8 @@ class CardServiceImplTest {
   void createThrowsWhenCardNumberAlreadyExists() {
     User user = user();
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
-    when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-    when(cardRepository.countByUserId(USER_ID)).thenReturn(0L);
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+    when(cardRepository.countActiveByUserId(USER_ID)).thenReturn(0L);
     when(cardRepository.existsByNumber(NUMBER)).thenReturn(true);
 
     assertThatThrownBy(() -> cardService.create(USER_ID, request))
@@ -215,23 +218,66 @@ class CardServiceImplTest {
   }
 
   @Test
-  void setActiveUpdatesCardAndEvictsOwnerFromCache() {
+  void setActiveDeactivatesCardWithoutLimitCheck() {
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.of(card(user())));
     when(cacheManager.getCache("users")).thenReturn(usersCache);
-    when(cardRepository.updateActive(CARD_ID, false)).thenReturn(1);
-    when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.of(USER_ID));
 
     cardService.setActive(CARD_ID, false);
 
     verify(cardRepository).updateActive(CARD_ID, false);
     verify(usersCache).evict(USER_ID);
+    verify(userRepository, never()).lockRowForUpdate(anyLong());
+    verify(cardRepository, never()).countActiveByUserId(anyLong());
+  }
+
+  @Test
+  void setActiveActivatesInactiveCardWhenUnderLimit() {
+    Card card = card(user());
+    card.setActive(false);
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.of(card));
+    when(cardRepository.countActiveByUserId(USER_ID)).thenReturn(4L);
+    when(cacheManager.getCache("users")).thenReturn(usersCache);
+
+    cardService.setActive(CARD_ID, true);
+
+    verify(userRepository).lockRowForUpdate(USER_ID);
+    verify(cardRepository).updateActive(CARD_ID, true);
+    verify(usersCache).evict(USER_ID);
+  }
+
+  @Test
+  void setActiveThrowsWhenActivatingCardOverLimit() {
+    Card card = card(user());
+    card.setActive(false);
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.of(card));
+    when(cardRepository.countActiveByUserId(USER_ID)).thenReturn(5L);
+
+    assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
+            .isInstanceOf(CardLimitExceededException.class);
+    verify(userRepository).lockRowForUpdate(USER_ID);
+    verify(cardRepository, never()).updateActive(anyLong(), anyBoolean());
+    verify(usersCache, never()).evict(any());
+  }
+
+  @Test
+  void setActiveSkipsLimitCheckWhenCardAlreadyActive() {
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.of(card(user())));
+    when(cacheManager.getCache("users")).thenReturn(usersCache);
+
+    cardService.setActive(CARD_ID, true);
+
+    verify(userRepository, never()).lockRowForUpdate(anyLong());
+    verify(cardRepository, never()).countActiveByUserId(anyLong());
+    verify(cardRepository).updateActive(CARD_ID, true);
   }
 
   @Test
   void setActiveThrowsWhenCardNotFound() {
-    when(cardRepository.updateActive(CARD_ID, true)).thenReturn(0);
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
             .isInstanceOf(CardNotFoundException.class);
+    verify(cardRepository, never()).updateActive(anyLong(), anyBoolean());
     verify(usersCache, never()).evict(any());
   }
 

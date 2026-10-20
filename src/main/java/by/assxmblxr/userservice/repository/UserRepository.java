@@ -1,7 +1,6 @@
 package by.assxmblxr.userservice.repository;
 
 import by.assxmblxr.userservice.entity.User;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 
@@ -16,9 +15,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
   boolean existsByEmailAndIdNot(String email, Long id);
 
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select u from User u where u.id = :id")
-  Optional<User> findByIdForUpdate(@Param("id") Long id);
+  @Query(value = "SELECT id FROM users WHERE id = :id FOR UPDATE", nativeQuery = true)
+  void lockRowForUpdate(@Param("id") Long id);
 
   @EntityGraph(attributePaths = "cards")
   Optional<User> findWithCardsById(Long id);

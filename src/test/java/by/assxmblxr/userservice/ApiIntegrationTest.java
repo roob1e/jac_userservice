@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import by.assxmblxr.userservice.entity.Card;
 import by.assxmblxr.userservice.repository.CardRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.Objects;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -46,7 +48,7 @@ class ApiIntegrationTest {
   @BeforeEach
   void cleanDatabaseAndCache() {
     jdbcTemplate.execute("TRUNCATE TABLE cards, users RESTART IDENTITY");
-    cacheManager.getCacheNames().forEach(name -> cacheManager.getCache(name).clear());
+    cacheManager.getCacheNames().forEach(name -> Objects.requireNonNull(cacheManager.getCache(name)).clear());
   }
 
   @Test
@@ -59,6 +61,7 @@ class ApiIntegrationTest {
             .andExpect(jsonPath("$.active").value(true))
             .andReturn().getResponse().getHeader("Location");
 
+    assert location != null;
     mockMvc.perform(get(URI.create(location)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.email").value("ivan@mail.com"));
@@ -104,6 +107,34 @@ class ApiIntegrationTest {
     assertThat(cardRepository.findByUserId(userId))
             .hasSize(5)
             .allSatisfy(card -> assertThat(card.getExpirationDate()).isEqualTo(LocalDate.of(2030, 3, 31)));
+  }
+
+  @Test
+  void deactivatedCardFreesSlotButCannotBeReactivatedOverLimit() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    long[] cardIds = new long[5];
+    for (int i = 0; i < 5; i++) {
+      cardIds[i] = createCard(userId, "411111111111111" + (i + 1));
+    }
+
+    mockMvc.perform(patch("/cards/{id}/deactivate", cardIds[0]))
+            .andExpect(status().isNoContent());
+
+    createCard(userId, "4111111111111116");
+
+    mockMvc.perform(patch("/cards/{id}/activate", cardIds[0]))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value(containsString("maximum of 5 cards")));
+
+    mockMvc.perform(patch("/cards/{id}/activate", cardIds[1]))
+            .andExpect(status().isNoContent());
+
+    assertThat(cardRepository.findByUserId(userId))
+            .hasSize(6)
+            .filteredOn(Card::isActive)
+            .hasSize(5);
+    mockMvc.perform(get("/cards/{id}", cardIds[0]))
+            .andExpect(jsonPath("$.active").value(false));
   }
 
   @Test
@@ -192,6 +223,15 @@ class ApiIntegrationTest {
     String response = mockMvc.perform(post("/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson(email, firstName, lastName)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+    return ((Number) JsonPath.read(response, "$.id")).longValue();
+  }
+
+  private long createCard(long userId, String number) throws Exception {
+    String response = mockMvc.perform(post("/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson(number)))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
     return ((Number) JsonPath.read(response, "$.id")).longValue();
