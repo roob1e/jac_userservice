@@ -231,6 +231,16 @@ class CardServiceImplTest {
   }
 
   @Test
+  void setActiveWorksWhenUsersCacheIsMissing() {
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.of(card(user())));
+    when(cacheManager.getCache("users")).thenReturn(null);
+
+    cardService.setActive(CARD_ID, false);
+
+    verify(cardRepository).updateActive(CARD_ID, false);
+  }
+
+  @Test
   void setActiveActivatesInactiveCardWhenUnderLimit() {
     Card card = card(user());
     card.setActive(false);

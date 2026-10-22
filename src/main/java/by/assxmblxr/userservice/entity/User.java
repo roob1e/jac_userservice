@@ -45,9 +45,4 @@ public class User {
     card.setUser(this);
     cards.add(card);
   }
-
-  public void removeCard(Card card) {
-    card.setUser(null);
-    cards.remove(card);
-  }
 }

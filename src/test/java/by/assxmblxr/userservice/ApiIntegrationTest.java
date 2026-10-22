@@ -3,6 +3,7 @@ package by.assxmblxr.userservice;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -217,6 +218,70 @@ class ApiIntegrationTest {
 
     mockMvc.perform(get("/users/abc"))
             .andExpect(status().isBadRequest());
+
+    mockMvc.perform(post("/users")
+                    .contentType(APPLICATION_JSON)
+                    .content("{not json"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Malformed request body"));
+
+    mockMvc.perform(patch("/users"))
+            .andExpect(status().isMethodNotAllowed())
+            .andExpect(jsonPath("$.status").value(405))
+            .andExpect(jsonPath("$.path").value("/users"));
+  }
+
+  @Test
+  void deletingUserRemovesTheirCards() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    createCard(userId, "4111111111111111");
+    createCard(userId, "4111111111111112");
+
+    mockMvc.perform(delete("/users/{id}", userId))
+            .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(status().isNotFound());
+    assertThat(cardRepository.findByUserId(userId)).isEmpty();
+
+    mockMvc.perform(delete("/users/{id}", userId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.message").value("User with id " + userId + " not found"));
+  }
+
+  @Test
+  void deactivatedUserCanBeActivatedAgain() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+
+    mockMvc.perform(patch("/users/{id}/deactivate", userId))
+            .andExpect(status().isNoContent());
+    mockMvc.perform(patch("/users/{id}/activate", userId))
+            .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/users/{id}", userId))
+            .andExpect(jsonPath("$.active").value(true));
+  }
+
+  @Test
+  void usersAndCardsCanBeFilteredByOwnerName() throws Exception {
+    long ivan = createUser("ivan@mail.com", "Ivan", "Petrov");
+    long anna = createUser("anna@mail.com", "Anna", "Smirnova");
+    createCard(ivan, "4111111111111111");
+    createCard(anna, "4111111111111112");
+
+    mockMvc.perform(get("/users").param("lastName", "SMIR"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].email").value("anna@mail.com"));
+
+    mockMvc.perform(get("/cards").param("firstName", "iv").param("lastName", "petr"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(1))
+            .andExpect(jsonPath("$.content[0].userId").value(ivan));
+
+    mockMvc.perform(get("/cards"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.content.length()").value(2));
   }
 
   private long createUser(String email, String firstName, String lastName) throws Exception {
