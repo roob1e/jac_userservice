@@ -179,6 +179,25 @@ class UserServiceImplTest {
     verify(cardRepository, never()).deactivateByUserId(anyLong());
   }
 
+  @Test
+  void deleteByIdDeletesExistingUser() {
+    User user = user();
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
+
+    userService.deleteById(USER_ID);
+
+    verify(userRepository).delete(user);
+  }
+
+  @Test
+  void deleteByIdThrowsWhenUserNotFound() {
+    when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> userService.deleteById(USER_ID))
+            .isInstanceOf(UserNotFoundException.class);
+    verify(userRepository, never()).delete(any(User.class));
+  }
+
   private User user() {
     return User.builder()
             .id(USER_ID)

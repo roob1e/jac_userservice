@@ -41,8 +41,9 @@ public class CardServiceImpl implements CardService {
   @CacheEvict(cacheNames = "users", key = "#userId")
   @Transactional
   public CardResponse create(Long userId, CardCreateRequest request) {
-    User user = findUser(userId);
-    if (cardRepository.countByUserId(userId) >= MAX_CARDS_PER_USER) {
+    User user = userRepository.findById(userId).orElseThrow(() -> new UserNotFoundException(userId));
+    lockUser(userId);
+    if (cardRepository.countActiveByUserId(userId) >= MAX_CARDS_PER_USER) {
       throw new CardLimitExceededException(userId, MAX_CARDS_PER_USER);
     }
     if (cardRepository.existsByNumber(request.number())) {
@@ -90,18 +91,25 @@ public class CardServiceImpl implements CardService {
   @Override
   @Transactional
   public void setActive(Long id, boolean active) {
-    Cache cache = cacheManager.getCache("users");
-    if (cardRepository.updateActive(id, active) == 0) {
-      throw new CardNotFoundException(id);
+    Card card = findCard(id);
+    Long userId = card.getUser().getId();
+
+    if (active && !card.isActive()) {
+      lockUser(userId);
+      if (cardRepository.countActiveByUserId(userId) >= MAX_CARDS_PER_USER) {
+        throw new CardLimitExceededException(userId, MAX_CARDS_PER_USER);
+      }
     }
-    Long userId = cardRepository.findUserIdById(id).orElseThrow(() -> new CardNotFoundException(id));
+
+    cardRepository.updateActive(id, active);
+    Cache cache = cacheManager.getCache("users");
     if (cache != null) {
       cache.evict(userId);
     }
   }
 
-  private User findUser(Long id) {
-    return userRepository.findByIdForUpdate(id).orElseThrow(() -> new UserNotFoundException(id));
+  private void lockUser(Long userId) {
+    userRepository.lockRowForUpdate(userId);
   }
 
   private Card findCard(Long id) {
