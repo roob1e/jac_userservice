@@ -114,7 +114,11 @@ class ApiIntegrationTest {
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated());
 
-    mockMvc.perform(patch("/api/users/{id}/deactivate", userId))
+    mockMvc.perform(patch("/api/users/{id}/status", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content("""
+                            {"active": false}
+                            """))
             .andExpect(status().isNoContent());
 
     mockMvc.perform(get("/api/users/{id}", userId))
@@ -149,7 +153,11 @@ class ApiIntegrationTest {
     mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards[0].holder").value("NEW HOLDER"));
 
-    mockMvc.perform(patch("/api/cards/{id}/deactivate", cardId))
+    mockMvc.perform(patch("/api/cards/{id}/status", cardId)
+                    .contentType(APPLICATION_JSON)
+                    .content("""
+                            {"active": false}
+                            """))
             .andExpect(status().isNoContent());
     mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards[0].active").value(false));

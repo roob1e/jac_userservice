@@ -3,6 +3,7 @@ package com.innowise.userservice.controller;
 import com.innowise.userservice.dto.CardCreateRequest;
 import com.innowise.userservice.dto.CardResponse;
 import com.innowise.userservice.dto.CardUpdateRequest;
+import com.innowise.userservice.dto.StatusUpdateRequest;
 import com.innowise.userservice.service.CardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,15 +61,12 @@ public class CardController {
     return ResponseEntity.ok(cardService.update(id, request));
   }
 
-  @PatchMapping("/api/cards/{id}/activate")
-  public ResponseEntity<Void> activate(@PathVariable Long id) {
-    cardService.setActive(id, true);
-    return ResponseEntity.noContent().build();
-  }
-
-  @PatchMapping("/api/cards/{id}/deactivate")
-  public ResponseEntity<Void> deactivate(@PathVariable Long id) {
-    cardService.setActive(id, false);
+  @PatchMapping("/api/cards/{id}/status")
+  public ResponseEntity<Void> updateStatus(
+          @PathVariable Long id,
+          @Valid @RequestBody StatusUpdateRequest request
+          ) {
+    cardService.setActive(id, request.active());
     return ResponseEntity.noContent().build();
   }
 }

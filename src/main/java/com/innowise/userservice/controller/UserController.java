@@ -1,5 +1,6 @@
 package com.innowise.userservice.controller;
 
+import com.innowise.userservice.dto.StatusUpdateRequest;
 import com.innowise.userservice.dto.UserCreateRequest;
 import com.innowise.userservice.dto.UserResponse;
 import com.innowise.userservice.dto.UserUpdateRequest;
@@ -47,19 +48,18 @@ public class UserController {
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<UserResponse> update(@PathVariable Long id, @Valid @RequestBody UserUpdateRequest request) {
+  public ResponseEntity<UserResponse> update(
+          @PathVariable Long id,
+          @Valid @RequestBody UserUpdateRequest request
+  ) {
     return ResponseEntity.ok(userService.update(id, request));
   }
 
-  @PatchMapping("/{id}/activate")
-  public ResponseEntity<Void> activate(@PathVariable Long id) {
-    userService.setActive(id, true);
-    return ResponseEntity.noContent().build();
-  }
-
-  @PatchMapping("/{id}/deactivate")
-  public ResponseEntity<Void> deactivate(@PathVariable Long id) {
-    userService.setActive(id, false);
+  @PatchMapping("/{id}/status")
+  public ResponseEntity<Void> updateStatus(
+          @PathVariable Long id,
+          @Valid @RequestBody StatusUpdateRequest request) {
+    userService.setActive(id, request.active());
     return ResponseEntity.noContent().build();
   }
 
