@@ -31,8 +31,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -58,12 +56,6 @@ class CardServiceImplTest {
 
   @Spy
   private CardMapper cardMapper = new CardMapperImpl();
-
-  @Mock
-  private CacheManager cacheManager;
-
-  @Mock
-  private Cache usersCache;
 
   @InjectMocks
   private CardServiceImpl cardService;
@@ -216,20 +208,17 @@ class CardServiceImplTest {
   }
 
   @Test
-  void setActiveUpdatesCardAndEvictsOwnerFromCache() {
-    when(cacheManager.getCache("users")).thenReturn(usersCache);
+  void deactivateUpdatesCard() {
     when(cardRepository.updateActive(CARD_ID, false)).thenReturn(1);
     when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.of(USER_ID));
 
     cardService.setActive(CARD_ID, false);
 
     verify(cardRepository).updateActive(CARD_ID, false);
-    verify(usersCache).evict(USER_ID);
   }
 
   @Test
   void activateUpdatesCardWhenOwnerHasLessThanFiveActiveCards() {
-    when(cacheManager.getCache("users")).thenReturn(usersCache);
     when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.of(USER_ID));
     when(cardRepository.countByUserIdAndActiveTrue(USER_ID)).thenReturn(4L);
     when(cardRepository.updateActive(CARD_ID, true)).thenReturn(1);
@@ -237,7 +226,6 @@ class CardServiceImplTest {
     cardService.setActive(CARD_ID, true);
 
     verify(cardRepository).updateActive(CARD_ID, true);
-    verify(usersCache).evict(USER_ID);
   }
 
   @Test
@@ -248,7 +236,6 @@ class CardServiceImplTest {
     assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
             .isInstanceOf(CardLimitExceededException.class);
     verify(cardRepository, never()).updateActive(anyLong(), anyBoolean());
-    verify(usersCache, never()).evict(any());
   }
 
   @Test
@@ -258,7 +245,6 @@ class CardServiceImplTest {
     assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
             .isInstanceOf(CardNotFoundException.class);
     verify(cardRepository, never()).updateActive(anyLong(), anyBoolean());
-    verify(usersCache, never()).evict(any());
   }
 
   @Test

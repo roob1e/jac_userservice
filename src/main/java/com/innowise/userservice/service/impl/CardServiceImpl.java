@@ -1,6 +1,7 @@
 package com.innowise.userservice.service.impl;
 
-import static com.innowise.userservice.specification.CardSpecification.*;
+import static com.innowise.userservice.specification.CardSpecification.ownerNameContains;
+import static com.innowise.userservice.specification.CardSpecification.ownerSurnameContains;
 
 import com.innowise.userservice.dto.CardCreateRequest;
 import com.innowise.userservice.dto.CardResponse;
@@ -16,8 +17,6 @@ import com.innowise.userservice.repository.CardRepository;
 import com.innowise.userservice.repository.UserRepository;
 import com.innowise.userservice.service.CardService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,7 +34,6 @@ public class CardServiceImpl implements CardService {
   private final CardRepository cardRepository;
   private final UserRepository userRepository;
   private final CardMapper cardMapper;
-  private final CacheManager cacheManager;
 
   @Override
   @CacheEvict(cacheNames = "users", key = "#userId")
@@ -92,9 +90,9 @@ public class CardServiceImpl implements CardService {
 
   @Override
   @Transactional
+  @CacheEvict(cacheNames = "users", key = "@cardRepository.findUserIdById(#id).orElse(null)")
   public void setActive(Long id, boolean active) {
     Long userId = cardRepository.findUserIdById(id).orElseThrow(() -> new CardNotFoundException(id));
-    Cache cache = cacheManager.getCache("users");
     if (active) {
       if (cardRepository.countByUserIdAndActiveTrue(userId) >= MAX_CARDS_PER_USER) {
         throw new CardLimitExceededException(userId, MAX_CARDS_PER_USER);
@@ -102,9 +100,6 @@ public class CardServiceImpl implements CardService {
     }
     if (cardRepository.updateActive(id, active) == 0) {
       throw new CardNotFoundException(id);
-    }
-    if (cache != null) {
-      cache.evict(userId);
     }
   }
 

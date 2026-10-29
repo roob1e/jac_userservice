@@ -1,6 +1,7 @@
 package com.innowise.userservice.service.impl;
 
-import static com.innowise.userservice.specification.UserSpecification.*;
+import static com.innowise.userservice.specification.UserSpecification.nameContains;
+import static com.innowise.userservice.specification.UserSpecification.surnameContains;
 
 import com.innowise.userservice.dto.UserCreateRequest;
 import com.innowise.userservice.dto.UserResponse;
