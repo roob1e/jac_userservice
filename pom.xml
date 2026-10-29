@@ -8,7 +8,7 @@
         <version>4.1.1</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>by.assxmblxr</groupId>
+    <groupId>com.innowise</groupId>
     <artifactId>UserService</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>UserService</name>
