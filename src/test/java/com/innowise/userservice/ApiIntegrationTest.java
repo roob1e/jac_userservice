@@ -1,5 +1,6 @@
 package com.innowise.userservice;
 
+import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -8,7 +9,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,7 +48,7 @@ class ApiIntegrationTest {
   @BeforeEach
   void cleanDatabaseAndCache() {
     jdbcTemplate.execute("TRUNCATE TABLE payment_cards, users RESTART IDENTITY");
-    cacheManager.getCacheNames().forEach(name -> cacheManager.getCache(name).clear());
+    cacheManager.getCacheNames().forEach(name -> requireNonNull(cacheManager.getCache(name)).clear());
   }
 
   @Test
@@ -56,9 +57,9 @@ class ApiIntegrationTest {
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Petrov")))
             .andExpect(status().isCreated())
-            .andExpect(header().exists("Location"))
             .andExpect(jsonPath("$.active").value(true))
             .andReturn().getResponse().getHeader("Location");
+    assertThat(location).isNotNull();
 
     mockMvc.perform(get(URI.create(location)))
             .andExpect(status().isOk())
@@ -203,6 +204,75 @@ class ApiIntegrationTest {
   }
 
   @Test
+  void userByIdIsServedFromCache() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    assertThat(cachedUser(userId)).isNull();
+
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(jsonPath("$.name").value("Ivan"));
+    assertThat(cachedUser(userId)).isNotNull();
+
+    jdbcTemplate.update("UPDATE users SET name = 'Changed in DB' WHERE id = ?", userId);
+
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(jsonPath("$.name").value("Ivan"));
+  }
+
+  @Test
+  void cachedUserIsEvictedByEveryChangingOperation() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+
+    cacheUser(userId);
+    mockMvc.perform(put("/api/users/{id}", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
+            .andExpect(status().isOk());
+    assertThat(cachedUser(userId)).as("after user update").isNull();
+
+    cacheUser(userId);
+    String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4111111111111111")))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+    long cardId = ((Number) JsonPath.read(card, "$.id")).longValue();
+    assertThat(cachedUser(userId)).as("after card creation").isNull();
+
+    cacheUser(userId);
+    mockMvc.perform(put("/api/cards/{id}", cardId)
+                    .contentType(APPLICATION_JSON)
+                    .content("""
+                            {"number": "4111111111111111", "holder": "NEW HOLDER", "expirationDate": "03/30"}
+                            """))
+            .andExpect(status().isOk());
+    assertThat(cachedUser(userId)).as("after card update").isNull();
+
+    cacheUser(userId);
+    mockMvc.perform(patch("/api/cards/{id}/status", cardId)
+                    .contentType(APPLICATION_JSON)
+                    .content(statusJson(false)))
+            .andExpect(status().isNoContent());
+    assertThat(cachedUser(userId)).as("after card status change").isNull();
+
+    cacheUser(userId);
+    mockMvc.perform(delete("/api/cards/{id}", cardId))
+            .andExpect(status().isNoContent());
+    assertThat(cachedUser(userId)).as("after card deletion").isNull();
+
+    cacheUser(userId);
+    mockMvc.perform(patch("/api/users/{id}/status", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(statusJson(false)))
+            .andExpect(status().isNoContent());
+    assertThat(cachedUser(userId)).as("after user status change").isNull();
+
+    cacheUser(userId);
+    mockMvc.perform(delete("/api/users/{id}", userId))
+            .andExpect(status().isNoContent());
+    assertThat(cachedUser(userId)).as("after user deletion").isNull();
+  }
+
+  @Test
   void deletingCardRemovesItAndRefreshesCachedUser() throws Exception {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
     String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
@@ -281,6 +351,16 @@ class ApiIntegrationTest {
     return """
             {"email": "%s", "name": "%s", "surname": "%s", "birthDate": "1990-05-15"}
             """.formatted(email, name, surname);
+  }
+
+  private void cacheUser(long userId) throws Exception {
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(status().isOk());
+    assertThat(cachedUser(userId)).isNotNull();
+  }
+
+  private Cache.ValueWrapper cachedUser(long userId) {
+    return requireNonNull(cacheManager.getCache("users")).get(userId);
   }
 
   private String statusJson(boolean active) {
