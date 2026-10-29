@@ -2,7 +2,6 @@ package com.innowise.userservice.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
-import java.io.Serializable;
 import java.time.Instant;
 import java.time.YearMonth;
 
@@ -15,5 +14,5 @@ public record CardResponse(
         boolean active,
         Instant createdAt,
         Instant updatedAt
-) implements Serializable {
+) {
 }
