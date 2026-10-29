@@ -100,6 +100,16 @@ public class CardServiceImpl implements CardService {
     }
   }
 
+  @Override
+  @Transactional
+  @CacheEvict(cacheNames = "users", key = "#result.userId()")
+  public CardResponse delete(Long id) {
+    Card card = findCard(id);
+    CardResponse response = cardMapper.toResponse(card);
+    card.getUser().removeCard(card);
+    return response;
+  }
+
   private User findUser(Long id) {
     return userRepository.findByIdForUpdate(id).orElseThrow(() -> new UserNotFoundException(id));
   }

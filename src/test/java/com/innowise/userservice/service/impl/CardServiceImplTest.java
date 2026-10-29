@@ -235,6 +235,29 @@ class CardServiceImplTest {
     verify(usersCache, never()).evict(any());
   }
 
+  @Test
+  void deleteRemovesCardFromOwnerAndReturnsOwnerId() {
+    User user = user();
+    Card card = card(user);
+    user.addCard(card);
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.of(card));
+
+    CardResponse response = cardService.delete(CARD_ID);
+
+    assertThat(response.userId()).isEqualTo(USER_ID);
+    assertThat(user.getCards()).isEmpty();
+    assertThat(card.getUser()).isNull();
+    verify(cardRepository, never()).delete(any(Card.class));
+  }
+
+  @Test
+  void deleteThrowsWhenCardNotFound() {
+    when(cardRepository.findById(CARD_ID)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> cardService.delete(CARD_ID))
+            .isInstanceOf(CardNotFoundException.class);
+  }
+
   private User user() {
     return User.builder()
             .id(USER_ID)

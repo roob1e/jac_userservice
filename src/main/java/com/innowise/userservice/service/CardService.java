@@ -15,4 +15,5 @@ public interface CardService {
   List<CardResponse> findByUserId(Long userId);
   CardResponse update(Long id, CardUpdateRequest request);
   void setActive(Long id, boolean active);
+  CardResponse delete(Long id);
 }

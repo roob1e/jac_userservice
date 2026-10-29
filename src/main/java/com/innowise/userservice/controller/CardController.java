@@ -69,4 +69,10 @@ public class CardController {
     cardService.setActive(id, request.active());
     return ResponseEntity.noContent().build();
   }
+
+  @DeleteMapping("/api/cards/{id}")
+  public ResponseEntity<Void> delete(@PathVariable Long id) {
+    cardService.delete(id);
+    return ResponseEntity.noContent().build();
+  }
 }

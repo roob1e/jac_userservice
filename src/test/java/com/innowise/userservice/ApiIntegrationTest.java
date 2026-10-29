@@ -3,6 +3,7 @@ package com.innowise.userservice;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -168,6 +169,28 @@ class ApiIntegrationTest {
             .andExpect(status().isOk());
     mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.surname").value("Sidorov"));
+  }
+
+  @Test
+  void deletingCardRemovesItAndRefreshesCachedUser() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4111111111111111")))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+    long cardId = ((Number) JsonPath.read(card, "$.id")).longValue();
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(jsonPath("$.cards.length()").value(1));
+
+    mockMvc.perform(delete("/api/cards/{id}", cardId))
+            .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/api/cards/{id}", cardId))
+            .andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(jsonPath("$.cards.length()").value(0));
+    assertThat(cardRepository.findByUserId(userId)).isEmpty();
   }
 
   @Test
