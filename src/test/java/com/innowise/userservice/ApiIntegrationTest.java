@@ -225,6 +225,24 @@ class ApiIntegrationTest {
   }
 
   @Test
+  void deletingUserDeletesTheirCards() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    mockMvc.perform(post("/api/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4111111111111111")))
+            .andExpect(status().isCreated());
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(status().isOk());
+
+    mockMvc.perform(delete("/api/users/{id}", userId))
+            .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/api/users/{id}", userId))
+            .andExpect(status().isNotFound());
+    assertThat(cardRepository.findByUserId(userId)).isEmpty();
+  }
+
+  @Test
   void errorsAreReturnedAsApiErrorWithMatchingStatus() throws Exception {
     createUser("ivan@mail.com", "Ivan", "Petrov");
 
