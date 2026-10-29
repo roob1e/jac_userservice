@@ -55,17 +55,20 @@ public class CardServiceImpl implements CardService {
   }
 
   @Override
+  @Transactional(readOnly = true)
   public CardResponse findById(Long id) {
     return cardMapper.toResponse(findCard(id));
   }
 
   @Override
+  @Transactional(readOnly = true)
   public Page<CardResponse> findAll(String name, String surname, Pageable pageable) {
     Specification<Card> spec = ownerNameContains(name).and(ownerSurnameContains(surname));
     return cardRepository.findAll(spec, pageable).map(cardMapper::toResponse);
   }
 
   @Override
+  @Transactional(readOnly = true)
   public List<CardResponse> findByUserId(Long userId) {
     if (!userRepository.existsById(userId)) {
       throw new UserNotFoundException(userId);

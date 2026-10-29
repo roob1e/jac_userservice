@@ -41,12 +41,14 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @Cacheable(cacheNames = "users", key = "#id")
+  @Transactional(readOnly = true)
   public UserWithCardsResponse findById(Long id) {
     User user = userRepository.findWithCardsById(id).orElseThrow(() -> new UserNotFoundException(id));
     return userMapper.toResponseWithCards(user);
   }
 
   @Override
+  @Transactional(readOnly = true)
   public Page<UserResponse> findAll(String name, String surname, Pageable pageable) {
     Specification<User> spec = nameContains(name).and(surnameContains(surname));
     return userRepository.findAll(spec, pageable).map(userMapper::toResponse);
@@ -78,6 +80,7 @@ public class UserServiceImpl implements UserService {
 
   @Override
   @CacheEvict(cacheNames = "users", key = "#id")
+  @Transactional
   public void deleteById(Long id) {
     userRepository.delete(findUser(id));
   }
