@@ -16,6 +16,8 @@ import com.innowise.userservice.repository.CardRepository;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -24,6 +26,7 @@ import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.net.URI;
 import java.time.LocalDate;
@@ -336,6 +339,64 @@ class ApiIntegrationTest {
 
     mockMvc.perform(get("/api/users/abc"))
             .andExpect(status().isBadRequest());
+
+    mockMvc.perform(post("/api/users")
+                    .contentType(APPLICATION_JSON)
+                    .content("{not json"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Malformed request body"));
+  }
+
+  @Test
+  void cardCanBeFetchedById() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    long cardId = createCard(userId, "4111111111111111");
+
+    mockMvc.perform(get("/api/cards/{id}", cardId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.number").value("4111111111111111"))
+            .andExpect(jsonPath("$.userId").value(userId));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "iva,     , 1",
+      "   , smir, 1",
+      "IVA, PETR, 1",
+      "iva, smir, 0",
+      "'' , ''  , 2",
+      "   ,     , 2"
+  })
+  void usersAndCardsAreFilteredByOwnerNameAndSurname(String name, String surname, int expected) throws Exception {
+    createCard(createUser("ivan@mail.com", "Ivan", "Petrov"), "4111111111111111");
+    createCard(createUser("anna@mail.com", "Anna", "Smirnova"), "4222222222222222");
+
+    mockMvc.perform(withNameFilters(get("/api/users"), name, surname))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.page.totalElements").value(expected));
+    mockMvc.perform(withNameFilters(get("/api/cards"), name, surname))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.page.totalElements").value(expected));
+  }
+
+  private MockHttpServletRequestBuilder withNameFilters(MockHttpServletRequestBuilder request,
+                                                        String name, String surname) {
+    if (name != null) {
+      request.param("name", name);
+    }
+    if (surname != null) {
+      request.param("surname", surname);
+    }
+    return request;
+  }
+
+  private long createCard(long userId, String number) throws Exception {
+    String response = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson(number)))
+            .andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString();
+    return ((Number) JsonPath.read(response, "$.id")).longValue();
   }
 
   private long createUser(String email, String name, String surname) throws Exception {
