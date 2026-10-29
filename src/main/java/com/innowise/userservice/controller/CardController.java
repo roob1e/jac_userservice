@@ -20,7 +20,7 @@ import java.util.List;
 public class CardController {
   private final CardService cardService;
 
-  @PostMapping("/users/{userId}/cards")
+  @PostMapping("/api/users/{userId}/cards")
   public ResponseEntity<CardResponse> create(
           @Valid @RequestBody CardCreateRequest cardCreateRequest,
           @PathVariable Long userId
@@ -33,17 +33,17 @@ public class CardController {
     return ResponseEntity.created(location).body(response);
   }
 
-  @GetMapping("/users/{userId}/cards")
+  @GetMapping("/api/users/{userId}/cards")
   public ResponseEntity<List<CardResponse>> findByUserId(@PathVariable Long userId) {
     return ResponseEntity.ok(cardService.findByUserId(userId));
   }
 
-  @GetMapping("/cards/{id}")
+  @GetMapping("/api/cards/{id}")
   public ResponseEntity<CardResponse> findById(@PathVariable Long id) {
     return ResponseEntity.ok(cardService.findById(id));
   }
 
-  @GetMapping("/cards")
+  @GetMapping("/api/cards")
   public ResponseEntity<Page<CardResponse>> findAll(
           @RequestParam(required = false) String name,
           @RequestParam(required = false) String surname,
@@ -52,7 +52,7 @@ public class CardController {
     return ResponseEntity.ok(cardService.findAll(name, surname, pageable));
   }
 
-  @PutMapping("/cards/{id}")
+  @PutMapping("/api/cards/{id}")
   public ResponseEntity<CardResponse> update(
           @PathVariable Long id,
           @Valid @RequestBody CardUpdateRequest request
@@ -60,13 +60,13 @@ public class CardController {
     return ResponseEntity.ok(cardService.update(id, request));
   }
 
-  @PatchMapping("/cards/{id}/activate")
+  @PatchMapping("/api/cards/{id}/activate")
   public ResponseEntity<Void> activate(@PathVariable Long id) {
     cardService.setActive(id, true);
     return ResponseEntity.noContent().build();
   }
 
-  @PatchMapping("/cards/{id}/deactivate")
+  @PatchMapping("/api/cards/{id}/deactivate")
   public ResponseEntity<Void> deactivate(@PathVariable Long id) {
     cardService.setActive(id, false);
     return ResponseEntity.noContent().build();

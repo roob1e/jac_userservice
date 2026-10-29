@@ -51,7 +51,7 @@ class ApiIntegrationTest {
 
   @Test
   void userCanBeCreatedReadUpdatedAndFound() throws Exception {
-    String location = mockMvc.perform(post("/users")
+    String location = mockMvc.perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Petrov")))
             .andExpect(status().isCreated())
@@ -71,7 +71,7 @@ class ApiIntegrationTest {
 
     createUser("anna@mail.com", "Anna", "Smirnova");
 
-    mockMvc.perform(get("/users").param("name", "pet").param("size", "10"))
+    mockMvc.perform(get("/api/users").param("name", "pet").param("size", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].email").value("petr@mail.com"))
@@ -83,20 +83,20 @@ class ApiIntegrationTest {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
 
     for (int i = 1; i <= 5; i++) {
-      mockMvc.perform(post("/users/{userId}/cards", userId)
+      mockMvc.perform(post("/api/users/{userId}/cards", userId)
                       .contentType(APPLICATION_JSON)
                       .content(cardJson("411111111111111" + i)))
               .andExpect(status().isCreated())
               .andExpect(jsonPath("$.userId").value(userId));
     }
 
-    mockMvc.perform(post("/users/{userId}/cards", userId)
+    mockMvc.perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111116")))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.message").value(containsString("maximum of 5 cards")));
 
-    mockMvc.perform(get("/users/{userId}/cards", userId))
+    mockMvc.perform(get("/api/users/{userId}/cards", userId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.length()").value(5))
             .andExpect(jsonPath("$[0].expirationDate").value("03/30"));
@@ -109,17 +109,17 @@ class ApiIntegrationTest {
   @Test
   void deactivatingUserDeactivatesTheirCards() throws Exception {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
-    mockMvc.perform(post("/users/{userId}/cards", userId)
+    mockMvc.perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated());
 
-    mockMvc.perform(patch("/users/{id}/deactivate", userId))
+    mockMvc.perform(patch("/api/users/{id}/deactivate", userId))
             .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/users/{id}", userId))
+    mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.active").value(false));
-    mockMvc.perform(get("/users/{userId}/cards", userId))
+    mockMvc.perform(get("/api/users/{userId}/cards", userId))
             .andExpect(jsonPath("$[0].active").value(false));
   }
 
@@ -128,37 +128,37 @@ class ApiIntegrationTest {
     createUser("other@mail.com", "Other", "User");
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
 
-    mockMvc.perform(get("/users/{id}", userId))
+    mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards.length()").value(0));
 
-    String card = mockMvc.perform(post("/users/{userId}/cards", userId)
+    String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
     long cardId = ((Number) JsonPath.read(card, "$.id")).longValue();
-    mockMvc.perform(get("/users/{id}", userId))
+    mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards.length()").value(1));
 
-    mockMvc.perform(put("/cards/{id}", cardId)
+    mockMvc.perform(put("/api/cards/{id}", cardId)
                     .contentType(APPLICATION_JSON)
                     .content("""
                             {"number": "4111111111111111", "holder": "NEW HOLDER", "expirationDate": "03/30"}
                             """))
             .andExpect(status().isOk());
-    mockMvc.perform(get("/users/{id}", userId))
+    mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards[0].holder").value("NEW HOLDER"));
 
-    mockMvc.perform(patch("/cards/{id}/deactivate", cardId))
+    mockMvc.perform(patch("/api/cards/{id}/deactivate", cardId))
             .andExpect(status().isNoContent());
-    mockMvc.perform(get("/users/{id}", userId))
+    mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards[0].active").value(false));
 
-    mockMvc.perform(put("/users/{id}", userId)
+    mockMvc.perform(put("/api/users/{id}", userId)
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
             .andExpect(status().isOk());
-    mockMvc.perform(get("/users/{id}", userId))
+    mockMvc.perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.surname").value("Sidorov"));
   }
 
@@ -166,30 +166,30 @@ class ApiIntegrationTest {
   void errorsAreReturnedAsApiErrorWithMatchingStatus() throws Exception {
     createUser("ivan@mail.com", "Ivan", "Petrov");
 
-    mockMvc.perform(post("/users")
+    mockMvc.perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Petrov")))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.path").value("/users"));
+            .andExpect(jsonPath("$.path").value("/api/users"));
 
-    mockMvc.perform(post("/users")
+    mockMvc.perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson("not-an-email", "", "Petrov")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value(containsString("email")))
             .andExpect(jsonPath("$.message").value(containsString("name")));
 
-    mockMvc.perform(get("/users/{id}", 999_999))
+    mockMvc.perform(get("/api/users/{id}", 999_999))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.message").value("User with id 999999 not found"));
 
-    mockMvc.perform(get("/users/abc"))
+    mockMvc.perform(get("/api/users/abc"))
             .andExpect(status().isBadRequest());
   }
 
   private long createUser(String email, String name, String surname) throws Exception {
-    String response = mockMvc.perform(post("/users")
+    String response = mockMvc.perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson(email, name, surname)))
             .andExpect(status().isCreated())
