@@ -108,6 +108,37 @@ class ApiIntegrationTest {
   }
 
   @Test
+  void onlyActiveCardsCountTowardsTheLimit() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    long firstCardId = 0;
+    for (int i = 1; i <= 5; i++) {
+      String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+                      .contentType(APPLICATION_JSON)
+                      .content(cardJson("411111111111111" + i)))
+              .andExpect(status().isCreated())
+              .andReturn().getResponse().getContentAsString();
+      if (i == 1) {
+        firstCardId = ((Number) JsonPath.read(card, "$.id")).longValue();
+      }
+    }
+
+    mockMvc.perform(patch("/api/cards/{id}/status", firstCardId)
+                    .contentType(APPLICATION_JSON)
+                    .content(statusJson(false)))
+            .andExpect(status().isNoContent());
+
+    mockMvc.perform(post("/api/users/{userId}/cards", userId)
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4111111111111116")))
+            .andExpect(status().isCreated());
+
+    mockMvc.perform(patch("/api/cards/{id}/status", firstCardId)
+                    .contentType(APPLICATION_JSON)
+                    .content(statusJson(true)))
+            .andExpect(status().isConflict());
+  }
+
+  @Test
   void deactivatingUserDeactivatesTheirCards() throws Exception {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
     mockMvc.perform(post("/api/users/{userId}/cards", userId)
@@ -232,6 +263,12 @@ class ApiIntegrationTest {
     return """
             {"email": "%s", "name": "%s", "surname": "%s", "birthDate": "1990-05-15"}
             """.formatted(email, name, surname);
+  }
+
+  private String statusJson(boolean active) {
+    return """
+            {"active": %s}
+            """.formatted(active);
   }
 
   private String cardJson(String number) {

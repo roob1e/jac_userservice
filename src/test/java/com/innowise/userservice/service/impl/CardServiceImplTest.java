@@ -3,6 +3,7 @@ package com.innowise.userservice.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -72,7 +73,7 @@ class CardServiceImplTest {
     User user = user();
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
     when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-    when(cardRepository.countByUserId(USER_ID)).thenReturn(4L);
+    when(cardRepository.countByUserIdAndActiveTrue(USER_ID)).thenReturn(4L);
     when(cardRepository.existsByNumber(NUMBER)).thenReturn(false);
 
     CardResponse response = cardService.create(USER_ID, request);
@@ -105,7 +106,7 @@ class CardServiceImplTest {
     User user = user();
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
     when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-    when(cardRepository.countByUserId(USER_ID)).thenReturn(5L);
+    when(cardRepository.countByUserIdAndActiveTrue(USER_ID)).thenReturn(5L);
 
     assertThatThrownBy(() -> cardService.create(USER_ID, request))
             .isInstanceOf(CardLimitExceededException.class);
@@ -118,7 +119,7 @@ class CardServiceImplTest {
     User user = user();
     CardCreateRequest request = new CardCreateRequest(NUMBER, "IVAN PETROV", YearMonth.of(2030, 3));
     when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(user));
-    when(cardRepository.countByUserId(USER_ID)).thenReturn(0L);
+    when(cardRepository.countByUserIdAndActiveTrue(USER_ID)).thenReturn(0L);
     when(cardRepository.existsByNumber(NUMBER)).thenReturn(true);
 
     assertThatThrownBy(() -> cardService.create(USER_ID, request))
@@ -227,11 +228,36 @@ class CardServiceImplTest {
   }
 
   @Test
+  void activateUpdatesCardWhenOwnerHasLessThanFiveActiveCards() {
+    when(cacheManager.getCache("users")).thenReturn(usersCache);
+    when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.of(USER_ID));
+    when(cardRepository.countByUserIdAndActiveTrue(USER_ID)).thenReturn(4L);
+    when(cardRepository.updateActive(CARD_ID, true)).thenReturn(1);
+
+    cardService.setActive(CARD_ID, true);
+
+    verify(cardRepository).updateActive(CARD_ID, true);
+    verify(usersCache).evict(USER_ID);
+  }
+
+  @Test
+  void activateThrowsWhenOwnerAlreadyHasFiveActiveCards() {
+    when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.of(USER_ID));
+    when(cardRepository.countByUserIdAndActiveTrue(USER_ID)).thenReturn(5L);
+
+    assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
+            .isInstanceOf(CardLimitExceededException.class);
+    verify(cardRepository, never()).updateActive(anyLong(), anyBoolean());
+    verify(usersCache, never()).evict(any());
+  }
+
+  @Test
   void setActiveThrowsWhenCardNotFound() {
-    when(cardRepository.updateActive(CARD_ID, true)).thenReturn(0);
+    when(cardRepository.findUserIdById(CARD_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> cardService.setActive(CARD_ID, true))
             .isInstanceOf(CardNotFoundException.class);
+    verify(cardRepository, never()).updateActive(anyLong(), anyBoolean());
     verify(usersCache, never()).evict(any());
   }
 

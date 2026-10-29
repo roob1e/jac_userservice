@@ -42,7 +42,7 @@ public class CardServiceImpl implements CardService {
   @Transactional
   public CardResponse create(Long userId, CardCreateRequest request) {
     User user = findUser(userId);
-    if (cardRepository.countByUserId(userId) >= MAX_CARDS_PER_USER) {
+    if (cardRepository.countByUserIdAndActiveTrue(userId) >= MAX_CARDS_PER_USER) {
       throw new CardLimitExceededException(userId, MAX_CARDS_PER_USER);
     }
     if (cardRepository.existsByNumber(request.number())) {
@@ -90,11 +90,16 @@ public class CardServiceImpl implements CardService {
   @Override
   @Transactional
   public void setActive(Long id, boolean active) {
+    Long userId = cardRepository.findUserIdById(id).orElseThrow(() -> new CardNotFoundException(id));
     Cache cache = cacheManager.getCache("users");
+    if (active) {
+      if (cardRepository.countByUserIdAndActiveTrue(userId) >= MAX_CARDS_PER_USER) {
+        throw new CardLimitExceededException(userId, MAX_CARDS_PER_USER);
+      }
+    }
     if (cardRepository.updateActive(id, active) == 0) {
       throw new CardNotFoundException(id);
     }
-    Long userId = cardRepository.findUserIdById(id).orElseThrow(() -> new CardNotFoundException(id));
     if (cache != null) {
       cache.evict(userId);
     }
