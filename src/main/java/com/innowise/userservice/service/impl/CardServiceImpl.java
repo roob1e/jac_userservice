@@ -60,8 +60,8 @@ public class CardServiceImpl implements CardService {
   }
 
   @Override
-  public Page<CardResponse> findAll(String firstName, String lastName, Pageable pageable) {
-    Specification<Card> spec = ownerFirstNameContains(firstName).and(ownerLastNameContains(lastName));
+  public Page<CardResponse> findAll(String name, String surname, Pageable pageable) {
+    Specification<Card> spec = ownerNameContains(name).and(ownerSurnameContains(surname));
     return cardRepository.findAll(spec, pageable).map(cardMapper::toResponse);
   }
 

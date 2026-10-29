@@ -45,11 +45,11 @@ public class CardController {
 
   @GetMapping("/cards")
   public ResponseEntity<Page<CardResponse>> findAll(
-          @RequestParam(required = false) String firstName,
-          @RequestParam(required = false) String lastName,
+          @RequestParam(required = false) String name,
+          @RequestParam(required = false) String surname,
           Pageable pageable
   ) {
-    return ResponseEntity.ok(cardService.findAll(firstName, lastName, pageable));
+    return ResponseEntity.ok(cardService.findAll(name, surname, pageable));
   }
 
   @PutMapping("/cards/{id}")

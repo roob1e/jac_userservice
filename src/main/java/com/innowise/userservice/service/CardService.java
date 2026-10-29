@@ -11,7 +11,7 @@ import java.util.List;
 public interface CardService {
   CardResponse create(Long userId ,CardCreateRequest request);
   CardResponse findById(Long id);
-  Page<CardResponse> findAll(String firstName, String lastName, Pageable pageable);
+  Page<CardResponse> findAll(String name, String surname, Pageable pageable);
   List<CardResponse> findByUserId(Long userId);
   CardResponse update(Long id, CardUpdateRequest request);
   void setActive(Long id, boolean active);

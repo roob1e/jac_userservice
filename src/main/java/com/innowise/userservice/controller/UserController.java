@@ -39,11 +39,11 @@ public class UserController {
 
   @GetMapping
   public ResponseEntity<Page<UserResponse>> findAll(
-          @RequestParam(required = false) String firstName,
-          @RequestParam(required = false) String lastName,
+          @RequestParam(required = false) String name,
+          @RequestParam(required = false) String surname,
           Pageable pageable
   ) {
-    return ResponseEntity.ok(userService.findAll(firstName, lastName, pageable));
+    return ResponseEntity.ok(userService.findAll(name, surname, pageable));
   }
 
   @PutMapping("/{id}")

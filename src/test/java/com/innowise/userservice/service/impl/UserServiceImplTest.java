@@ -34,7 +34,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -42,6 +42,7 @@ import java.util.Optional;
 class UserServiceImplTest {
   private static final Long USER_ID = 1L;
   private static final String EMAIL = "ivan@mail.com";
+  private static final LocalDate BIRTH_DATE = LocalDate.of(1990, 5, 15);
 
   @Mock
   private UserRepository userRepository;
@@ -57,7 +58,7 @@ class UserServiceImplTest {
 
   @Test
   void createSavesUserAndReturnsResponse() {
-    UserCreateRequest request = new UserCreateRequest("Ivan", "Petrov", EMAIL);
+    UserCreateRequest request = new UserCreateRequest("Ivan", "Petrov", EMAIL, BIRTH_DATE);
     when(userRepository.existsByEmail(EMAIL)).thenReturn(false);
     when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
       User user = invocation.getArgument(0);
@@ -69,14 +70,14 @@ class UserServiceImplTest {
 
     assertThat(response.id()).isEqualTo(USER_ID);
     assertThat(response.email()).isEqualTo(EMAIL);
-    assertThat(response.firstName()).isEqualTo("Ivan");
-    assertThat(response.lastName()).isEqualTo("Petrov");
+    assertThat(response.name()).isEqualTo("Ivan");
+    assertThat(response.surname()).isEqualTo("Petrov");
     assertThat(response.active()).isTrue();
   }
 
   @Test
   void createThrowsWhenEmailAlreadyExists() {
-    UserCreateRequest request = new UserCreateRequest("Ivan", "Petrov", EMAIL);
+    UserCreateRequest request = new UserCreateRequest("Ivan", "Petrov", EMAIL, BIRTH_DATE);
     when(userRepository.existsByEmail(EMAIL)).thenReturn(true);
 
     assertThatThrownBy(() -> userService.create(request))
@@ -117,21 +118,21 @@ class UserServiceImplTest {
   @Test
   void updateChangesUserFields() {
     User user = user();
-    UserUpdateRequest request = new UserUpdateRequest("Petr", "Ivanov", "petr@mail.com");
+    UserUpdateRequest request = new UserUpdateRequest("Petr", "Ivanov", "petr@mail.com", BIRTH_DATE);
     when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
     when(userRepository.existsByEmailAndIdNot("petr@mail.com", USER_ID)).thenReturn(false);
 
     UserResponse response = userService.update(USER_ID, request);
 
-    assertThat(user.getFirstName()).isEqualTo("Petr");
-    assertThat(user.getLastName()).isEqualTo("Ivanov");
+    assertThat(user.getName()).isEqualTo("Petr");
+    assertThat(user.getSurname()).isEqualTo("Ivanov");
     assertThat(user.getEmail()).isEqualTo("petr@mail.com");
     assertThat(response.email()).isEqualTo("petr@mail.com");
   }
 
   @Test
   void updateThrowsWhenUserNotFound() {
-    UserUpdateRequest request = new UserUpdateRequest("Petr", "Ivanov", "petr@mail.com");
+    UserUpdateRequest request = new UserUpdateRequest("Petr", "Ivanov", "petr@mail.com", BIRTH_DATE);
     when(userRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> userService.update(USER_ID, request))
@@ -142,14 +143,14 @@ class UserServiceImplTest {
   @Test
   void updateThrowsWhenEmailTakenByAnotherUser() {
     User user = user();
-    UserUpdateRequest request = new UserUpdateRequest("Petr", "Ivanov", "taken@mail.com");
+    UserUpdateRequest request = new UserUpdateRequest("Petr", "Ivanov", "taken@mail.com", BIRTH_DATE);
     when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
     when(userRepository.existsByEmailAndIdNot("taken@mail.com", USER_ID)).thenReturn(true);
 
     assertThatThrownBy(() -> userService.update(USER_ID, request))
             .isInstanceOf(EmailAlreadyExistsException.class);
     assertThat(user.getEmail()).isEqualTo(EMAIL);
-    assertThat(user.getFirstName()).isEqualTo("Ivan");
+    assertThat(user.getName()).isEqualTo("Ivan");
   }
 
   @Test
@@ -183,9 +184,8 @@ class UserServiceImplTest {
     return User.builder()
             .id(USER_ID)
             .email(EMAIL)
-            .firstName("Ivan")
-            .lastName("Petrov")
-            .createdAt(Instant.parse("2026-01-01T00:00:00Z"))
+            .name("Ivan")
+            .surname("Petrov")
             .build();
   }
 }

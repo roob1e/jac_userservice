@@ -13,8 +13,8 @@ import java.time.LocalDate;
 @Entity
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "cards")
-public class Card {
+@Table(name = "payment_cards")
+public class Card extends BaseEntity {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
@@ -35,8 +35,4 @@ public class Card {
   @Column
   @Builder.Default
   private boolean active = true;
-
-  @Column
-  @CreationTimestamp
-  private Instant createdAt;
 }

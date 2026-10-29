@@ -16,13 +16,11 @@ public interface CardMapper {
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "user", ignore = true)
   @Mapping(target = "active", ignore = true)
-  @Mapping(target = "createdAt", ignore = true)
   Card toEntity(CardCreateRequest request);
 
   @Mapping(target = "id", ignore = true)
   @Mapping(target = "user", ignore = true)
   @Mapping(target = "active", ignore = true)
-  @Mapping(target = "createdAt", ignore = true)
   void updateEntity(CardUpdateRequest request, @MappingTarget Card card);
 
   @Mapping(target = "userId", source = "user.id")

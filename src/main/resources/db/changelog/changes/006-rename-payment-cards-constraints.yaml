@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-rename_payment-cards-constraints
+      author: assxmblxr
+      changes:
+        - sql:
+            sql: |
+              ALTER TABLE payment_cards RENAME CONSTRAINT pk_cards_id TO pk_payment_cards;
+              ALTER TABLE payment_cards RENAME CONSTRAINT fk_cards_user_id TO fk_payment_cards_user_id;
+              ALTER TABLE payment_cards RENAME CONSTRAINT uq_cards_number TO uq_payment_cards_number;
+              ALTER INDEX idx_cards_user_id RENAME TO idx_payment_cards_user_id;

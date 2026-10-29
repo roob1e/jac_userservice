@@ -8,3 +8,12 @@ databaseChangeLog:
   - include:
       file: changes/003-create-cards-table.yaml
       relativeToChangelogFile: true
+  - include:
+      file: changes/004-align-users-with-spec.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/005-align-cards-with-spec.yaml
+      relativeToChangelogFile: true
+  - include:
+      file: changes/006-rename-payment-cards-constraints.yaml
+      relativeToChangelogFile: true

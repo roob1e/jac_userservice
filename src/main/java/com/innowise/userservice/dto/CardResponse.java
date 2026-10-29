@@ -13,6 +13,7 @@ public record CardResponse(
         String holder,
         @JsonFormat(pattern = "MM/yy") YearMonth expirationDate,
         boolean active,
-        Instant createdAt
+        Instant createdAt,
+        Instant updatedAt
 ) implements Serializable {
 }

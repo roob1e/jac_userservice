@@ -12,13 +12,11 @@ import org.mapstruct.MappingTarget;
 @Mapper(componentModel = "spring", uses = CardMapper.class)
 public interface UserMapper {
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "active", ignore = true)
   @Mapping(target = "cards", ignore = true)
   User toEntity(UserCreateRequest request);
 
   @Mapping(target = "id", ignore = true)
-  @Mapping(target = "createdAt", ignore = true)
   @Mapping(target = "active", ignore = true)
   @Mapping(target = "cards", ignore = true)
   void updateEntity(UserUpdateRequest request, @MappingTarget User user);

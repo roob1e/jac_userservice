@@ -10,7 +10,7 @@ import org.springframework.data.domain.Pageable;
 public interface UserService {
   UserResponse create(UserCreateRequest request);
   UserWithCardsResponse findById(Long id);
-  Page<UserResponse> findAll(String firstName, String lastName, Pageable pageable);
+  Page<UserResponse> findAll(String name, String surname, Pageable pageable);
   UserResponse update(Long id, UserUpdateRequest request);
   void setActive(Long id, boolean active);
   void deleteById(Long id);

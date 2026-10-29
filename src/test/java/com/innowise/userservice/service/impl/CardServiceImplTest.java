@@ -239,8 +239,8 @@ class CardServiceImplTest {
     return User.builder()
             .id(USER_ID)
             .email("ivan@mail.com")
-            .firstName("Ivan")
-            .lastName("Petrov")
+            .name("Ivan")
+            .surname("Petrov")
             .build();
   }
 

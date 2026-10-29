@@ -16,7 +16,7 @@ public interface CardRepository extends JpaRepository<Card, Long>, JpaSpecificat
   long countByUserId(Long userId);
 
   @Modifying(clearAutomatically = true)
-  @Query(value = "UPDATE cards SET active = :active WHERE id = :id", nativeQuery = true)
+  @Query(value = "UPDATE payment_cards SET active = :active WHERE id = :id", nativeQuery = true)
   int updateActive(@Param("id") Long id, @Param("active") boolean active);
 
   @Modifying(clearAutomatically = true)

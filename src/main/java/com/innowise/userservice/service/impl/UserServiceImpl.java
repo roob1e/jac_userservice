@@ -47,8 +47,8 @@ public class UserServiceImpl implements UserService {
   }
 
   @Override
-  public Page<UserResponse> findAll(String firstName, String lastName, Pageable pageable) {
-    Specification<User> spec = firstNameContains(firstName).and(lastNameContains(lastName));
+  public Page<UserResponse> findAll(String name, String surname, Pageable pageable) {
+    Specification<User> spec = nameContains(name).and(surnameContains(surname));
     return userRepository.findAll(spec, pageable).map(userMapper::toResponse);
   }
 

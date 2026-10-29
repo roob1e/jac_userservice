@@ -45,7 +45,7 @@ class ApiIntegrationTest {
 
   @BeforeEach
   void cleanDatabaseAndCache() {
-    jdbcTemplate.execute("TRUNCATE TABLE cards, users RESTART IDENTITY");
+    jdbcTemplate.execute("TRUNCATE TABLE payment_cards, users RESTART IDENTITY");
     cacheManager.getCacheNames().forEach(name -> cacheManager.getCache(name).clear());
   }
 
@@ -67,11 +67,11 @@ class ApiIntegrationTest {
                     .contentType(APPLICATION_JSON)
                     .content(userJson("petr@mail.com", "Petr", "Ivanov")))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.firstName").value("Petr"));
+            .andExpect(jsonPath("$.name").value("Petr"));
 
     createUser("anna@mail.com", "Anna", "Smirnova");
 
-    mockMvc.perform(get("/users").param("firstName", "pet").param("size", "10"))
+    mockMvc.perform(get("/users").param("name", "pet").param("size", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].email").value("petr@mail.com"))
@@ -159,7 +159,7 @@ class ApiIntegrationTest {
                     .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
             .andExpect(status().isOk());
     mockMvc.perform(get("/users/{id}", userId))
-            .andExpect(jsonPath("$.lastName").value("Sidorov"));
+            .andExpect(jsonPath("$.surname").value("Sidorov"));
   }
 
   @Test
@@ -178,7 +178,7 @@ class ApiIntegrationTest {
                     .content(userJson("not-an-email", "", "Petrov")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value(containsString("email")))
-            .andExpect(jsonPath("$.message").value(containsString("firstName")));
+            .andExpect(jsonPath("$.message").value(containsString("name")));
 
     mockMvc.perform(get("/users/{id}", 999_999))
             .andExpect(status().isNotFound())
@@ -188,19 +188,19 @@ class ApiIntegrationTest {
             .andExpect(status().isBadRequest());
   }
 
-  private long createUser(String email, String firstName, String lastName) throws Exception {
+  private long createUser(String email, String name, String surname) throws Exception {
     String response = mockMvc.perform(post("/users")
                     .contentType(APPLICATION_JSON)
-                    .content(userJson(email, firstName, lastName)))
+                    .content(userJson(email, name, surname)))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
     return ((Number) JsonPath.read(response, "$.id")).longValue();
   }
 
-  private String userJson(String email, String firstName, String lastName) {
+  private String userJson(String email, String name, String surname) {
     return """
-            {"email": "%s", "firstName": "%s", "lastName": "%s"}
-            """.formatted(email, firstName, lastName);
+            {"email": "%s", "name": "%s", "surname": "%s", "birthDate": "1990-05-15"}
+            """.formatted(email, name, surname);
   }
 
   private String cardJson(String number) {

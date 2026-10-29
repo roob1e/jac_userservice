@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-align-cards-with-spec
+      author: assxmblxr
+      changes:
+        - renameTable:
+            oldTableName: cards
+            newTableName: payment_cards
+        - addColumn:
+            tableName: payment_cards
+            columns:
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false

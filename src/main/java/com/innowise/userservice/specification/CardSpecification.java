@@ -8,23 +8,23 @@ import org.springframework.data.jpa.domain.Specification;
 public final class CardSpecification {
   private CardSpecification() {}
 
-  public static Specification<Card> ownerFirstNameContains(String firstName) {
+  public static Specification<Card> ownerNameContains(String name) {
     return (root, query, cb) -> {
-      if (firstName == null || firstName.isBlank()) {
+      if (name == null || name.isBlank()) {
         return cb.conjunction();
       }
       Join<Card, User> user = root.join("user");
-      return cb.like(cb.lower(user.get("firstName")), "%" + firstName.toLowerCase()+ "%");
+      return cb.like(cb.lower(user.get("name")), "%" + name.toLowerCase()+ "%");
     };
   }
 
-  public static Specification<Card> ownerLastNameContains(String lastName) {
+  public static Specification<Card> ownerSurnameContains(String surname) {
     return (root, query, cb) -> {
-      if (lastName == null || lastName.isBlank()) {
+      if (surname == null || surname.isBlank()) {
         return cb.conjunction();
       }
       Join<Card, User> user = root.join("user");
-      return cb.like(cb.lower(user.get("lastName")), "%" + lastName.toLowerCase()+ "%");
+      return cb.like(cb.lower(user.get("surname")), "%" + surname.toLowerCase()+ "%");
     };
   }
 }

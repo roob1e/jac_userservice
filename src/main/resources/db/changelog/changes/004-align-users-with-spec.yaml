@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-align-users-with-spec
+      author: assxmblxr
+      changes:
+        - renameColumn:
+            tableName: users
+            oldColumnName: first_name
+            newColumnName: name
+        - renameColumn:
+            tableName: users
+            oldColumnName: last_name
+            newColumnName: surname
+        - addColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: birth_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
