@@ -7,6 +7,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -40,9 +42,7 @@ public class GlobalExceptionHandler {
   }
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
-  public ResponseEntity<ApiError> handleHttpMessageNotReadableException(
-          HttpMessageNotReadableException e, HttpServletRequest request
-  ) {
+  public ResponseEntity<ApiError> handleHttpMessageNotReadableException(HttpServletRequest request) {
     return buildResponse(HttpStatus.BAD_REQUEST, "Malformed request body", request);
   }
 
@@ -62,6 +62,16 @@ public class GlobalExceptionHandler {
   ) {
     log.warn("Data integrity violation on {}", request.getRequestURI(), e);
     return buildResponse(HttpStatus.CONFLICT, "Data integrity violation", request);
+  }
+
+  @ExceptionHandler(AuthenticationException.class)
+  public ResponseEntity<ApiError> handleAuthenticationException(HttpServletRequest request) {
+    return buildResponse(HttpStatus.UNAUTHORIZED, "Authentication failed", request);
+  }
+
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<ApiError> handleAccessDeniedException(HttpServletRequest request) {
+    return buildResponse(HttpStatus.FORBIDDEN, "Access denied", request);
   }
 
   @ExceptionHandler(Exception.class)

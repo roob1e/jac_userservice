@@ -4,6 +4,7 @@ import static java.util.Objects.requireNonNull;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -25,7 +26,10 @@ import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.JwtRequestPostProcessor;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 import java.net.URI;
@@ -55,8 +59,99 @@ class ApiIntegrationTest {
   }
 
   @Test
+  void requestWithoutTokenIsRejectedWithApiError401() throws Exception {
+    mockMvc.perform(get("/api/users/me"))
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.status").value(401))
+            .andExpect(jsonPath("$.path").value("/api/users/me"));
+  }
+
+  @Test
+  void tokenWithoutUserIdIsRejectedWith401() throws Exception {
+    mockMvc.perform(get("/api/users/me")
+                    .with(jwt().jwt(token -> token.claim("role", "USER"))
+                            .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+            .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void userReadsAndUpdatesOnlyOwnProfileThroughMe() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    long otherId = createUser("anna@mail.com", "Anna", "Smirnova");
+
+    mockMvc.perform(get("/api/users/me").with(user(userId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(userId))
+            .andExpect(jsonPath("$.email").value("ivan@mail.com"));
+
+    mockMvc.perform(put("/api/users/me").with(user(userId))
+                    .contentType(APPLICATION_JSON)
+                    .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.surname").value("Sidorov"));
+
+    mockMvc.perform(get("/api/users/{id}", otherId).with(user(userId)))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.status").value(403));
+    mockMvc.perform(get("/api/users/{id}", userId).with(user(userId)))
+            .andExpect(status().isForbidden());
+    mockMvc.perform(get("/api/users").with(user(userId)))
+            .andExpect(status().isForbidden());
+    mockMvc.perform(delete("/api/users/{id}", otherId).with(user(userId)))
+            .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void userManagesOnlyOwnCards() throws Exception {
+    long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
+    long otherId = createUser("anna@mail.com", "Anna", "Smirnova");
+    long foreignCardId = createCard(otherId, "4222222222222222");
+
+    String card = mockMvc.perform(post("/api/users/me/cards").with(user(userId))
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4111111111111111")))
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.userId").value(userId))
+            .andReturn().getResponse().getContentAsString();
+    long ownCardId = ((Number) JsonPath.read(card, "$.id")).longValue();
+
+    mockMvc.perform(get("/api/users/me/cards").with(user(userId)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].id").value(ownCardId));
+
+    mockMvc.perform(get("/api/cards/{id}", ownCardId).with(user(userId)))
+            .andExpect(status().isOk());
+    mockMvc.perform(put("/api/cards/{id}", ownCardId).with(user(userId))
+                    .contentType(APPLICATION_JSON)
+                    .content("""
+                            {"number": "4111111111111111", "holder": "NEW HOLDER", "expirationDate": "03/30"}
+                            """))
+            .andExpect(status().isOk());
+    mockMvc.perform(patch("/api/cards/{id}/status", ownCardId).with(user(userId))
+                    .contentType(APPLICATION_JSON)
+                    .content(statusJson(false)))
+            .andExpect(status().isNoContent());
+
+    mockMvc.perform(get("/api/cards/{id}", foreignCardId).with(user(userId)))
+            .andExpect(status().isForbidden());
+    mockMvc.perform(delete("/api/cards/{id}", foreignCardId).with(user(userId)))
+            .andExpect(status().isForbidden());
+    mockMvc.perform(post("/api/users/{userId}/cards", otherId).with(user(userId))
+                    .contentType(APPLICATION_JSON)
+                    .content(cardJson("4333333333333333")))
+            .andExpect(status().isForbidden());
+    mockMvc.perform(get("/api/cards").with(user(userId)))
+            .andExpect(status().isForbidden());
+
+    mockMvc.perform(delete("/api/cards/{id}", ownCardId).with(user(userId)))
+            .andExpect(status().isNoContent());
+    assertThat(cardRepository.findById(foreignCardId)).isPresent();
+  }
+
+  @Test
   void userCanBeCreatedReadUpdatedAndFound() throws Exception {
-    String location = mockMvc.perform(post("/api/users")
+    String location = perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Petrov")))
             .andExpect(status().isCreated())
@@ -64,11 +159,11 @@ class ApiIntegrationTest {
             .andReturn().getResponse().getHeader("Location");
     assertThat(location).isNotNull();
 
-    mockMvc.perform(get(URI.create(location)))
+    perform(get(URI.create(location)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.email").value("ivan@mail.com"));
 
-    mockMvc.perform(put(URI.create(location))
+    perform(put(URI.create(location))
                     .contentType(APPLICATION_JSON)
                     .content(userJson("petr@mail.com", "Petr", "Ivanov")))
             .andExpect(status().isOk())
@@ -76,7 +171,7 @@ class ApiIntegrationTest {
 
     createUser("anna@mail.com", "Anna", "Smirnova");
 
-    mockMvc.perform(get("/api/users").param("name", "pet").param("size", "10"))
+    perform(get("/api/users").param("name", "pet").param("size", "10"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.content.length()").value(1))
             .andExpect(jsonPath("$.content[0].email").value("petr@mail.com"))
@@ -88,20 +183,20 @@ class ApiIntegrationTest {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
 
     for (int i = 1; i <= 5; i++) {
-      mockMvc.perform(post("/api/users/{userId}/cards", userId)
+      perform(post("/api/users/{userId}/cards", userId)
                       .contentType(APPLICATION_JSON)
                       .content(cardJson("411111111111111" + i)))
               .andExpect(status().isCreated())
               .andExpect(jsonPath("$.userId").value(userId));
     }
 
-    mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111116")))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.message").value(containsString("maximum of 5 cards")));
 
-    mockMvc.perform(get("/api/users/{userId}/cards", userId))
+    perform(get("/api/users/{userId}/cards", userId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.length()").value(5))
             .andExpect(jsonPath("$[0].expirationDate").value("03/30"));
@@ -116,7 +211,7 @@ class ApiIntegrationTest {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
     long firstCardId = 0;
     for (int i = 1; i <= 5; i++) {
-      String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+      String card = perform(post("/api/users/{userId}/cards", userId)
                       .contentType(APPLICATION_JSON)
                       .content(cardJson("411111111111111" + i)))
               .andExpect(status().isCreated())
@@ -126,17 +221,17 @@ class ApiIntegrationTest {
       }
     }
 
-    mockMvc.perform(patch("/api/cards/{id}/status", firstCardId)
+    perform(patch("/api/cards/{id}/status", firstCardId)
                     .contentType(APPLICATION_JSON)
                     .content(statusJson(false)))
             .andExpect(status().isNoContent());
 
-    mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111116")))
             .andExpect(status().isCreated());
 
-    mockMvc.perform(patch("/api/cards/{id}/status", firstCardId)
+    perform(patch("/api/cards/{id}/status", firstCardId)
                     .contentType(APPLICATION_JSON)
                     .content(statusJson(true)))
             .andExpect(status().isConflict());
@@ -145,21 +240,21 @@ class ApiIntegrationTest {
   @Test
   void deactivatingUserDeactivatesTheirCards() throws Exception {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
-    mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated());
 
-    mockMvc.perform(patch("/api/users/{id}/status", userId)
+    perform(patch("/api/users/{id}/status", userId)
                     .contentType(APPLICATION_JSON)
                     .content("""
                             {"active": false}
                             """))
             .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.active").value(false));
-    mockMvc.perform(get("/api/users/{userId}/cards", userId))
+    perform(get("/api/users/{userId}/cards", userId))
             .andExpect(jsonPath("$[0].active").value(false));
   }
 
@@ -168,41 +263,41 @@ class ApiIntegrationTest {
     createUser("other@mail.com", "Other", "User");
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
 
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards.length()").value(0));
 
-    String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    String card = perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
     long cardId = ((Number) JsonPath.read(card, "$.id")).longValue();
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards.length()").value(1));
 
-    mockMvc.perform(put("/api/cards/{id}", cardId)
+    perform(put("/api/cards/{id}", cardId)
                     .contentType(APPLICATION_JSON)
                     .content("""
                             {"number": "4111111111111111", "holder": "NEW HOLDER", "expirationDate": "03/30"}
                             """))
             .andExpect(status().isOk());
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards[0].holder").value("NEW HOLDER"));
 
-    mockMvc.perform(patch("/api/cards/{id}/status", cardId)
+    perform(patch("/api/cards/{id}/status", cardId)
                     .contentType(APPLICATION_JSON)
                     .content("""
                             {"active": false}
                             """))
             .andExpect(status().isNoContent());
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards[0].active").value(false));
 
-    mockMvc.perform(put("/api/users/{id}", userId)
+    perform(put("/api/users/{id}", userId)
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
             .andExpect(status().isOk());
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.surname").value("Sidorov"));
   }
 
@@ -211,13 +306,13 @@ class ApiIntegrationTest {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
     assertThat(cachedUser(userId)).isNull();
 
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.name").value("Ivan"));
     assertThat(cachedUser(userId)).isNotNull();
 
     jdbcTemplate.update("UPDATE users SET name = 'Changed in DB' WHERE id = ?", userId);
 
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.name").value("Ivan"));
   }
 
@@ -226,14 +321,14 @@ class ApiIntegrationTest {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
 
     cacheUser(userId);
-    mockMvc.perform(put("/api/users/{id}", userId)
+    perform(put("/api/users/{id}", userId)
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Sidorov")))
             .andExpect(status().isOk());
     assertThat(cachedUser(userId)).as("after user update").isNull();
 
     cacheUser(userId);
-    String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    String card = perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated())
@@ -242,7 +337,7 @@ class ApiIntegrationTest {
     assertThat(cachedUser(userId)).as("after card creation").isNull();
 
     cacheUser(userId);
-    mockMvc.perform(put("/api/cards/{id}", cardId)
+    perform(put("/api/cards/{id}", cardId)
                     .contentType(APPLICATION_JSON)
                     .content("""
                             {"number": "4111111111111111", "holder": "NEW HOLDER", "expirationDate": "03/30"}
@@ -251,26 +346,26 @@ class ApiIntegrationTest {
     assertThat(cachedUser(userId)).as("after card update").isNull();
 
     cacheUser(userId);
-    mockMvc.perform(patch("/api/cards/{id}/status", cardId)
+    perform(patch("/api/cards/{id}/status", cardId)
                     .contentType(APPLICATION_JSON)
                     .content(statusJson(false)))
             .andExpect(status().isNoContent());
     assertThat(cachedUser(userId)).as("after card status change").isNull();
 
     cacheUser(userId);
-    mockMvc.perform(delete("/api/cards/{id}", cardId))
+    perform(delete("/api/cards/{id}", cardId))
             .andExpect(status().isNoContent());
     assertThat(cachedUser(userId)).as("after card deletion").isNull();
 
     cacheUser(userId);
-    mockMvc.perform(patch("/api/users/{id}/status", userId)
+    perform(patch("/api/users/{id}/status", userId)
                     .contentType(APPLICATION_JSON)
                     .content(statusJson(false)))
             .andExpect(status().isNoContent());
     assertThat(cachedUser(userId)).as("after user status change").isNull();
 
     cacheUser(userId);
-    mockMvc.perform(delete("/api/users/{id}", userId))
+    perform(delete("/api/users/{id}", userId))
             .andExpect(status().isNoContent());
     assertThat(cachedUser(userId)).as("after user deletion").isNull();
   }
@@ -278,21 +373,21 @@ class ApiIntegrationTest {
   @Test
   void deletingCardRemovesItAndRefreshesCachedUser() throws Exception {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
-    String card = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    String card = perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated())
             .andReturn().getResponse().getContentAsString();
     long cardId = ((Number) JsonPath.read(card, "$.id")).longValue();
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards.length()").value(1));
 
-    mockMvc.perform(delete("/api/cards/{id}", cardId))
+    perform(delete("/api/cards/{id}", cardId))
             .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/cards/{id}", cardId))
+    perform(get("/api/cards/{id}", cardId))
             .andExpect(status().isNotFound());
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(jsonPath("$.cards.length()").value(0));
     assertThat(cardRepository.findByUserId(userId)).isEmpty();
   }
@@ -300,17 +395,17 @@ class ApiIntegrationTest {
   @Test
   void deletingUserDeletesTheirCards() throws Exception {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
-    mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson("4111111111111111")))
             .andExpect(status().isCreated());
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(status().isOk());
 
-    mockMvc.perform(delete("/api/users/{id}", userId))
+    perform(delete("/api/users/{id}", userId))
             .andExpect(status().isNoContent());
 
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(status().isNotFound());
     assertThat(cardRepository.findByUserId(userId)).isEmpty();
   }
@@ -319,28 +414,28 @@ class ApiIntegrationTest {
   void errorsAreReturnedAsApiErrorWithMatchingStatus() throws Exception {
     createUser("ivan@mail.com", "Ivan", "Petrov");
 
-    mockMvc.perform(post("/api/users")
+    perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson("ivan@mail.com", "Ivan", "Petrov")))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.status").value(409))
             .andExpect(jsonPath("$.path").value("/api/users"));
 
-    mockMvc.perform(post("/api/users")
+    perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson("not-an-email", "", "Petrov")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value(containsString("email")))
             .andExpect(jsonPath("$.message").value(containsString("name")));
 
-    mockMvc.perform(get("/api/users/{id}", 999_999))
+    perform(get("/api/users/{id}", 999_999))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.message").value("User with id 999999 not found"));
 
-    mockMvc.perform(get("/api/users/abc"))
+    perform(get("/api/users/abc"))
             .andExpect(status().isBadRequest());
 
-    mockMvc.perform(post("/api/users")
+    perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content("{not json"))
             .andExpect(status().isBadRequest())
@@ -352,7 +447,7 @@ class ApiIntegrationTest {
     long userId = createUser("ivan@mail.com", "Ivan", "Petrov");
     long cardId = createCard(userId, "4111111111111111");
 
-    mockMvc.perform(get("/api/cards/{id}", cardId))
+    perform(get("/api/cards/{id}", cardId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.number").value("4111111111111111"))
             .andExpect(jsonPath("$.userId").value(userId));
@@ -371,10 +466,10 @@ class ApiIntegrationTest {
     createCard(createUser("ivan@mail.com", "Ivan", "Petrov"), "4111111111111111");
     createCard(createUser("anna@mail.com", "Anna", "Smirnova"), "4222222222222222");
 
-    mockMvc.perform(withNameFilters(get("/api/users"), name, surname))
+    perform(withNameFilters(get("/api/users"), name, surname))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.page.totalElements").value(expected));
-    mockMvc.perform(withNameFilters(get("/api/cards"), name, surname))
+    perform(withNameFilters(get("/api/cards"), name, surname))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.page.totalElements").value(expected));
   }
@@ -391,7 +486,7 @@ class ApiIntegrationTest {
   }
 
   private long createCard(long userId, String number) throws Exception {
-    String response = mockMvc.perform(post("/api/users/{userId}/cards", userId)
+    String response = perform(post("/api/users/{userId}/cards", userId)
                     .contentType(APPLICATION_JSON)
                     .content(cardJson(number)))
             .andExpect(status().isCreated())
@@ -400,7 +495,7 @@ class ApiIntegrationTest {
   }
 
   private long createUser(String email, String name, String surname) throws Exception {
-    String response = mockMvc.perform(post("/api/users")
+    String response = perform(post("/api/users")
                     .contentType(APPLICATION_JSON)
                     .content(userJson(email, name, surname)))
             .andExpect(status().isCreated())
@@ -415,7 +510,7 @@ class ApiIntegrationTest {
   }
 
   private void cacheUser(long userId) throws Exception {
-    mockMvc.perform(get("/api/users/{id}", userId))
+    perform(get("/api/users/{id}", userId))
             .andExpect(status().isOk());
     assertThat(cachedUser(userId)).isNotNull();
   }
@@ -434,5 +529,19 @@ class ApiIntegrationTest {
     return """
             {"number": "%s", "holder": "IVAN PETROV", "expirationDate": "03/30"}
             """.formatted(number);
+  }
+
+  private ResultActions perform(MockHttpServletRequestBuilder request) throws Exception {
+    return mockMvc.perform(request.with(admin()));
+  }
+
+  private JwtRequestPostProcessor admin() {
+    return jwt().jwt(token -> token.claim("userId", 1_000_000L).claim("role", "ADMIN"))
+            .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+  }
+
+  private JwtRequestPostProcessor user(long userId) {
+    return jwt().jwt(token -> token.claim("userId", userId).claim("role", "USER"))
+            .authorities(new SimpleGrantedAuthority("ROLE_USER"));
   }
 }

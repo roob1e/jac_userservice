@@ -7,6 +7,9 @@ import com.innowise.userservice.dto.StatusUpdateRequest;
 import com.innowise.userservice.service.CardService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -24,34 +27,48 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import java.net.URI;
 import java.util.List;
 
+import static com.innowise.userservice.security.CurrentUser.currentUserId;
+
 @RestController
 @RequiredArgsConstructor
 public class CardController {
   private final CardService cardService;
 
+  @PostMapping("/api/users/me/cards")
+  public ResponseEntity<CardResponse> createMine(
+          @AuthenticationPrincipal Jwt jwt,
+          @Valid @RequestBody CardCreateRequest cardCreateRequest
+  ) {
+    return created(cardService.create(currentUserId(jwt), cardCreateRequest));
+  }
+
+  @GetMapping("/api/users/me/cards")
+  public ResponseEntity<List<CardResponse>> findMine(@AuthenticationPrincipal Jwt jwt) {
+    return ResponseEntity.ok(cardService.findByUserId(currentUserId(jwt)));
+  }
+
+  @PreAuthorize("hasRole('ADMIN')")
   @PostMapping("/api/users/{userId}/cards")
   public ResponseEntity<CardResponse> create(
           @Valid @RequestBody CardCreateRequest cardCreateRequest,
           @PathVariable Long userId
   ) {
-    CardResponse response = cardService.create(userId, cardCreateRequest);
-    URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-            .path("/cards/{id}")
-            .buildAndExpand(response.id())
-            .toUri();
-    return ResponseEntity.created(location).body(response);
+    return created(cardService.create(userId, cardCreateRequest));
   }
 
+  @PreAuthorize("hasRole('ADMIN')")
   @GetMapping("/api/users/{userId}/cards")
   public ResponseEntity<List<CardResponse>> findByUserId(@PathVariable Long userId) {
     return ResponseEntity.ok(cardService.findByUserId(userId));
   }
 
+  @PreAuthorize("hasRole('ADMIN') or @cardAccess.isOwner(#id, authentication)")
   @GetMapping("/api/cards/{id}")
   public ResponseEntity<CardResponse> findById(@PathVariable Long id) {
     return ResponseEntity.ok(cardService.findById(id));
   }
 
+  @PreAuthorize("hasRole('ADMIN')")
   @GetMapping("/api/cards")
   public ResponseEntity<Page<CardResponse>> findAll(
           @RequestParam(required = false) String name,
@@ -61,6 +78,7 @@ public class CardController {
     return ResponseEntity.ok(cardService.findAll(name, surname, pageable));
   }
 
+  @PreAuthorize("hasRole('ADMIN') or @cardAccess.isOwner(#id, authentication)")
   @PutMapping("/api/cards/{id}")
   public ResponseEntity<CardResponse> update(
           @PathVariable Long id,
@@ -69,6 +87,7 @@ public class CardController {
     return ResponseEntity.ok(cardService.update(id, request));
   }
 
+  @PreAuthorize("hasRole('ADMIN') or @cardAccess.isOwner(#id, authentication)")
   @PatchMapping("/api/cards/{id}/status")
   public ResponseEntity<Void> updateStatus(
           @PathVariable Long id,
@@ -78,9 +97,18 @@ public class CardController {
     return ResponseEntity.noContent().build();
   }
 
+  @PreAuthorize("hasRole('ADMIN') or @cardAccess.isOwner(#id, authentication)")
   @DeleteMapping("/api/cards/{id}")
   public ResponseEntity<Void> delete(@PathVariable Long id) {
     cardService.delete(id);
     return ResponseEntity.noContent().build();
+  }
+
+  private ResponseEntity<CardResponse> created(CardResponse response) {
+    URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
+            .path("/api/cards/{id}")
+            .buildAndExpand(response.id())
+            .toUri();
+    return ResponseEntity.created(location).body(response);
   }
 }
